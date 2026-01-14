@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using MultiCountryFxImporter.Core.Models;
 using MultiCountryFxImporter.MnbClient;
+using System.Globalization;
 
 namespace MultiCountryFxImporter.Infrastructure
 {
@@ -26,16 +27,24 @@ namespace MultiCountryFxImporter.Infrastructure
 
             foreach (var day in doc.Descendants("Day"))
             {
-                var date = DateTime.Parse(day.Attribute("date")?.Value ?? DateTime.Now.ToString());
+                var dateAttr = day.Attribute("date")?.Value ?? DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                var date = DateTime.Parse(dateAttr, CultureInfo.InvariantCulture);
                 foreach (var rateNode in day.Descendants("Rate"))
                 {
+                    var currency = rateNode.Attribute("curr")?.Value ?? string.Empty;
+                    var unitStr = (rateNode.Attribute("unit")?.Value ?? "1").Trim().Replace(',', '.');
+                    var rateStr = (rateNode.Value ?? string.Empty).Trim().Replace(',', '.');
+
+                    var rateUnit = decimal.Parse(unitStr, NumberStyles.Any, CultureInfo.InvariantCulture);
+                    var rate = decimal.Parse(rateStr, NumberStyles.Any, CultureInfo.InvariantCulture);
+
                     list.Add(new FxRate
                     {
                         Date = date,
                         Bank = "MNB",
-                        Currency = rateNode.Attribute("curr")?.Value ?? "",
-                        RateUnit = decimal.Parse(rateNode.Attribute("unit")?.Value ?? "1"),
-                        Rate = decimal.Parse(rateNode.Value.Replace(',', '.')),
+                        Currency = currency,
+                        RateUnit = rateUnit,
+                        Rate = rate,
                     });
                 }
             }
