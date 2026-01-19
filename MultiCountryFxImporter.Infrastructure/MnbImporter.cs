@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using MultiCountryFxImporter.Core.Models;
@@ -17,20 +18,59 @@ namespace MultiCountryFxImporter.Infrastructure
             _client = client;
         }
 
-        public async Task<IEnumerable<FxRate>> ImportAsync(DateTime? startDate = null, DateTime? endDate = null)
+        public async Task<IEnumerable<FxRate>> ImportAsync(
+            DateTime? startDate = null,
+            DateTime? endDate = null,
+            string? currencyNames = null)
         {
-            var response = await _client.GetCurrentExchangeRatesAsync(new GetCurrentExchangeRatesRequestBody());
-            var xml = response.GetCurrentExchangeRatesResponse1.GetCurrentExchangeRatesResult;
-
-            var doc = XDocument.Parse(xml!);
+            var doc = await LoadRatesXmlAsync(startDate, endDate, currencyNames);
             WriteXmlSnapshot(doc);
-            var list = new List<FxRate>();
 
-            foreach (var day in doc.Descendants("Day"))
+            return ParseRates(doc);
+        }
+
+        private async Task<XDocument> LoadRatesXmlAsync(DateTime? startDate, DateTime? endDate, string? currencyNames)
+        {
+            if (startDate.HasValue || endDate.HasValue)
+            {
+                if (!startDate.HasValue)
+                {
+                    startDate = endDate;
+                }
+
+                if (!endDate.HasValue)
+                {
+                    endDate = startDate;
+                }
+
+                var requestBody = new GetExchangeRatesRequestBody
+                {
+                    startDate = startDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    endDate = endDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    currencyNames = string.IsNullOrWhiteSpace(currencyNames) ? null : currencyNames
+                };
+                var response = await _client.GetExchangeRatesAsync(requestBody);
+                var xml = response.GetExchangeRatesResponse1.GetExchangeRatesResult;
+                if (string.IsNullOrWhiteSpace(xml))
+                {
+                    return new XDocument();
+                }
+                return XDocument.Parse(xml!);
+            }
+
+            var currentResponse = await _client.GetCurrentExchangeRatesAsync(new GetCurrentExchangeRatesRequestBody());
+            var currentXml = currentResponse.GetCurrentExchangeRatesResponse1.GetCurrentExchangeRatesResult;
+            return XDocument.Parse(currentXml!);
+        }
+
+        private static IReadOnlyList<FxRate> ParseRates(XDocument doc)
+        {
+            var list = new List<FxRate>();
+            foreach (var day in doc.Descendants().Where(node => node.Name.LocalName == "Day"))
             {
                 var dateAttr = day.Attribute("date")?.Value ?? DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                 var date = DateTime.Parse(dateAttr, CultureInfo.InvariantCulture);
-                foreach (var rateNode in day.Descendants("Rate"))
+                foreach (var rateNode in day.Descendants().Where(node => node.Name.LocalName == "Rate"))
                 {
                     var currency = rateNode.Attribute("curr")?.Value ?? string.Empty;
                     var unitStr = (rateNode.Attribute("unit")?.Value ?? "1").Trim().Replace(',', '.');

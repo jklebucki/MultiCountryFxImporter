@@ -36,6 +36,39 @@ public class FxRateController : ControllerBase
 
         return File(memoryStream.ToArray(), "text/csv", "rates.csv");
     }
+
+    [HttpGet("csv/date")]
+    public async Task<IActionResult> GetCsvForDate([FromQuery] string date, [FromQuery] string? currencies)
+    {
+        if (string.IsNullOrWhiteSpace(date) ||
+            !DateTime.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+        {
+            return BadRequest("date must be in yyyy-MM-dd format");
+        }
+
+        var rates = await _importer.ImportAsync(parsedDate, parsedDate, currencies);
+        if (!string.IsNullOrWhiteSpace(currencies))
+        {
+            var allowed = currencies
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            rates = rates.Where(rate => allowed.Contains(rate.Currency));
+        }
+
+        using var memoryStream = new MemoryStream();
+        using var writer = new StreamWriter(memoryStream);
+        var config = new CsvConfiguration(CultureInfo.InvariantCulture);
+        config.Delimiter = ";";
+        config.HasHeaderRecord = false;
+        using var csv = new CsvWriter(writer, config);
+        csv.Context.RegisterClassMap<FxRateMap>();
+        csv.Context.TypeConverterOptionsCache.GetOptions<DateTime>().Formats = new[] { "yyyy-MM-dd" };
+        csv.WriteRecords(rates);
+        writer.Flush();
+        memoryStream.Position = 0;
+
+        return File(memoryStream.ToArray(), "text/csv", $"rates-{parsedDate:yyyyMMdd}.csv");
+    }
 }
 
 public class FxRateMap : ClassMap<FxRate>
