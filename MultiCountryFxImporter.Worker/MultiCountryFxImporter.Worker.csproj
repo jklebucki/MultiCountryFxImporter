@@ -7,8 +7,12 @@
     <UserSecretsId>dotnet-MultiCountryFxImporter.Worker-502f069c-9e14-4a28-b423-422ca209940b</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CsvHelper" Version="12.1.2" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="8.0.2" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MultiCountryFxImporter.Core\MultiCountryFxImporter.Core.csproj" />

@@ -23,6 +23,7 @@ namespace MultiCountryFxImporter.Infrastructure
             var xml = response.GetCurrentExchangeRatesResponse1.GetCurrentExchangeRatesResult;
 
             var doc = XDocument.Parse(xml!);
+            WriteXmlSnapshot(doc);
             var list = new List<FxRate>();
 
             foreach (var day in doc.Descendants("Day"))
@@ -50,6 +51,17 @@ namespace MultiCountryFxImporter.Infrastructure
             }
 
             return list;
+        }
+
+        private static void WriteXmlSnapshot(XDocument doc)
+        {
+            var logsDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+            Directory.CreateDirectory(logsDirectory);
+
+            var fileName = $"mnb-response-{DateTime.UtcNow:yyyyMMdd-HHmmss}.xml";
+            var filePath = Path.Combine(logsDirectory, fileName);
+
+            doc.Save(filePath, SaveOptions.None);
         }
     }
 }
