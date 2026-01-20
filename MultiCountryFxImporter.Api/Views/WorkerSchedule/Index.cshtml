@@ -8,7 +8,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Worker Schedule</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
     <div id="app" class="max-w-6xl mx-auto px-6 py-10">
@@ -58,7 +60,7 @@
                     </div>
                     <div>
                         <label class="text-xs uppercase text-slate-400">Run At (HH:mm:ss)</label>
-                        <input type="time" step="1" v-model="entry.runAtLocalTime" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                        <input data-timepicker v-model="entry.runAtLocalTime" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
                     </div>
                     <div class="flex items-end">
                         <button class="w-full bg-rose-500 hover:bg-rose-400 text-white font-semibold py-2 rounded-lg transition" @@click="removeEntry(index)">
@@ -104,8 +106,43 @@
             },
             mounted() {
                 this.reload();
+                this.$nextTick(() => {
+                    this.initTimePickers();
+                });
             },
             methods: {
+                formatApiBody(body, response) {
+                    if (!body) {
+                        return "<empty>";
+                    }
+                    const contentType = response.headers.get("content-type") || "";
+                    const looksJson = contentType.includes("application/json") || body.trim().startsWith("{") || body.trim().startsWith("[");
+                    if (!looksJson) {
+                        return body;
+                    }
+                    try {
+                        const parsed = JSON.parse(body);
+                        return JSON.stringify(parsed, null, 2);
+                    } catch {
+                        return body;
+                    }
+                },
+                initTimePickers() {
+                    const elements = document.querySelectorAll("[data-timepicker]");
+                    elements.forEach(element => {
+                        if (element._flatpickr) {
+                            return;
+                        }
+                        flatpickr(element, {
+                            enableTime: true,
+                            noCalendar: true,
+                            time_24hr: true,
+                            enableSeconds: true,
+                            dateFormat: "H:i:S",
+                            allowInput: true
+                        });
+                    });
+                },
                 normalizeTime(value) {
                     if (!value) {
                         return "";
@@ -131,6 +168,9 @@
                         company: "KFT",
                         runAtLocalTime: "02:00:00"
                     });
+                    this.$nextTick(() => {
+                        this.initTimePickers();
+                    });
                 },
                 removeEntry(index) {
                     this.entries.splice(index, 1);
@@ -139,10 +179,11 @@
                     this.result = { status: "Loading...", body: "Fetching schedule..." };
                     try {
                         const response = await fetch("/api/worker-schedule");
-                        const body = await response.text();
+                        const raw = await response.text();
+                        const body = this.formatApiBody(raw, response);
                         this.result = { status: response.status, body: body || "<empty>" };
                         if (response.ok) {
-                            const parsed = JSON.parse(body || "{}");
+                            const parsed = JSON.parse(raw || "{}");
                             const list = parsed.workerSchedule?.environments ?? [];
                             this.entries = list.map(entry => ({
                                 id: this.generateId(),
@@ -150,6 +191,9 @@
                                 company: entry.company ?? "KFT",
                                 runAtLocalTime: entry.runAtLocalTime ?? "02:00:00"
                             }));
+                            this.$nextTick(() => {
+                                this.initTimePickers();
+                            });
                         }
                     } catch (error) {
                         this.result = { status: "Error", body: error.toString() };
@@ -173,7 +217,8 @@
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify(payload)
                         });
-                        const body = await response.text();
+                        const raw = await response.text();
+                        const body = this.formatApiBody(raw, response);
                         this.result = { status: response.status, body: body || "<empty>" };
                         if (response.ok) {
                             this.lastSaved = new Date().toLocaleString();
