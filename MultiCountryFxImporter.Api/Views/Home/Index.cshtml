@@ -204,13 +204,37 @@
                 getFilename(response, url) {
                     const disposition = response.headers.get("content-disposition");
                     if (disposition) {
-                        const match = disposition.match(/filename="?([^"]+)"?/i);
-                        if (match && match[1]) {
-                            return match[1];
+                        const parsed = this.parseContentDispositionFilename(disposition);
+                        if (parsed) {
+                            return parsed;
                         }
                     }
                     const fallback = url.includes("csv/date") ? "rates-date.csv" : "rates.csv";
                     return fallback;
+                },
+                parseContentDispositionFilename(disposition) {
+                    const parts = disposition.split(";").map(part => part.trim());
+                    const filenameStar = parts.find(part => part.toLowerCase().startsWith("filename*="));
+                    if (filenameStar) {
+                        const value = filenameStar.split("=", 2)[1]?.trim() ?? "";
+                        const trimmed = value.replace(/^["']|["']$/g, "");
+                        const match = trimmed.match(/^UTF-8''(.+)$/i);
+                        if (match && match[1]) {
+                            try {
+                                return decodeURIComponent(match[1]);
+                            } catch {
+                                return match[1];
+                            }
+                        }
+                    }
+
+                    const filename = parts.find(part => part.toLowerCase().startsWith("filename=") || part.toLowerCase().startsWith("filename_="));
+                    if (filename) {
+                        const value = filename.split("=", 2)[1]?.trim() ?? "";
+                        return value.replace(/^["']|["']$/g, "");
+                    }
+
+                    return null;
                 },
                 downloadBlob(blob, filename) {
                     const url = URL.createObjectURL(blob);
