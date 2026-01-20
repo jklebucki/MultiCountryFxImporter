@@ -61,8 +61,8 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now multicountryfx-api.service
-systemctl enable --now multicountryfx-worker.service
+systemctl enable multicountryfx-api.service
+systemctl enable multicountryfx-worker.service
 
 systemctl status --no-pager multicountryfx-api.service || true
 systemctl status --no-pager multicountryfx-worker.service || true
