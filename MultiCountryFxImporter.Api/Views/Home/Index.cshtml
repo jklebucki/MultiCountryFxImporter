@@ -13,8 +13,20 @@
 <body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
     <div id="app" class="max-w-6xl mx-auto px-6 py-10">
         <header class="mb-10">
-            <p class="text-sm uppercase tracking-[0.25em] text-indigo-200/70">MultiCountryFxImporter</p>
-            <h1 class="text-4xl md:text-5xl font-semibold text-white mt-2">Currency Rates API Console</h1>
+            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <p class="text-sm uppercase tracking-[0.25em] text-indigo-200/70">MultiCountryFxImporter</p>
+                    <h1 class="text-4xl md:text-5xl font-semibold text-white mt-2">Currency Rates API Console</h1>
+                </div>
+                <nav class="flex flex-wrap gap-3">
+                    <a href="/" class="px-4 py-2 rounded-full border border-indigo-400/60 text-indigo-100 text-sm hover:bg-indigo-500/20 transition">
+                        API Console
+                    </a>
+                    <a href="/worker-schedule" class="px-4 py-2 rounded-full border border-slate-600 text-slate-200 text-sm hover:bg-slate-800/50 transition">
+                        Worker Schedule
+                    </a>
+                </nav>
+            </div>
             <p class="text-slate-300 mt-4 max-w-2xl">
                 Interactive dashboard for the API endpoints. Trigger imports, fetch CSV outputs, and inspect detailed results
                 without leaving the browser.

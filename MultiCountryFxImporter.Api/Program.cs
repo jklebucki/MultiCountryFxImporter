@@ -23,6 +23,8 @@ builder.Services.AddScoped<ICurrencyImporter, MnbImporter>();
 builder.Services.AddScoped<MNBArfolyamServiceSoapClient>();
 builder.Services.Configure<CurrencyRatesApiOptions>(builder.Configuration.GetSection("CurrencyRatesApi"));
 builder.Services.Configure<CurrencyRatesImportOptions>(builder.Configuration.GetSection("CurrencyRatesImport"));
+builder.Services.Configure<WorkerScheduleConfigOptions>(builder.Configuration.GetSection("WorkerScheduleConfig"));
+builder.Services.AddSingleton<MultiCountryFxImporter.Api.Services.WorkerScheduleStore>();
 
 var apiOptions = builder.Configuration.GetSection("CurrencyRatesApi").Get<CurrencyRatesApiOptions>() ?? new CurrencyRatesApiOptions();
 builder.Services.AddHttpClient<ICurrencyRatesApiClient, CurrencyRatesApiClient>(client =>

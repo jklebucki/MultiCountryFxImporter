@@ -1,0 +1,171 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Worker Schedule</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
+    <div id="app" class="max-w-6xl mx-auto px-6 py-10">
+        <header class="mb-10">
+            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <p class="text-sm uppercase tracking-[0.25em] text-indigo-200/70">MultiCountryFxImporter</p>
+                    <h1 class="text-4xl md:text-5xl font-semibold text-white mt-2">Worker Schedule</h1>
+                </div>
+                <nav class="flex flex-wrap gap-3">
+                    <a href="/" class="px-4 py-2 rounded-full border border-slate-600 text-slate-200 text-sm hover:bg-slate-800/50 transition">
+                        API Console
+                    </a>
+                    <a href="/worker-schedule" class="px-4 py-2 rounded-full border border-indigo-400/60 text-indigo-100 text-sm hover:bg-indigo-500/20 transition">
+                        Worker Schedule
+                    </a>
+                </nav>
+            </div>
+            <p class="text-slate-300 mt-4 max-w-2xl">
+                Configure which IFS environments should be handled by the worker and at what local time each environment executes.
+                Changes are saved to a JSON file and picked up by the worker without restart.
+            </p>
+        </header>
+
+        <section class="bg-slate-900/70 border border-slate-700/60 rounded-2xl p-6 shadow-lg">
+            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold text-white">Environment Entries</h2>
+                    <p class="text-sm text-slate-300 mt-2">Add or remove environments. Empty environments are ignored.</p>
+                </div>
+                <button class="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-semibold transition" @@click="addEntry">
+                    Add Environment
+                </button>
+            </div>
+
+            <div class="mt-6 space-y-4">
+                <div v-for="(entry, index) in entries" :key="entry.id" class="grid gap-4 md:grid-cols-4 bg-slate-950/70 border border-slate-800 rounded-xl p-4">
+                    <div>
+                        <label class="text-xs uppercase text-slate-400">Environment</label>
+                        <select v-model="entry.environment" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                            <option v-for="env in environments" :key="env" :value="env">{{ env }}</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs uppercase text-slate-400">Company</label>
+                        <input v-model="entry.company" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                        <label class="text-xs uppercase text-slate-400">Run At (HH:mm:ss)</label>
+                        <input v-model="entry.runAtLocalTime" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                    <div class="flex items-end">
+                        <button class="w-full bg-rose-500 hover:bg-rose-400 text-white font-semibold py-2 rounded-lg transition" @@click="removeEntry(index)">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex flex-col gap-3 md:flex-row md:items-center">
+                <button class="px-5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white font-semibold transition" @@click="save">
+                    Save Schedule
+                </button>
+                <button class="px-5 py-2 rounded-lg border border-slate-600 text-slate-200 text-sm hover:bg-slate-800/50 transition" @@click="reload">
+                    Reload from File
+                </button>
+                <span class="text-sm text-slate-400" v-if="lastSaved">Last saved: {{ lastSaved }}</span>
+            </div>
+        </section>
+
+        <section class="mt-8 bg-slate-950/70 border border-slate-800 rounded-2xl p-6">
+            <h2 class="text-xl font-semibold text-white">Response Details</h2>
+            <div v-if="result" class="mt-4 space-y-3">
+                <p class="text-sm text-slate-300"><span class="text-slate-400">Status:</span> {{ result.status }}</p>
+                <pre class="bg-slate-900 rounded-lg p-3 text-xs text-slate-200 overflow-auto">{{ result.body }}</pre>
+            </div>
+            <div v-else class="mt-4 text-sm text-slate-400">
+                Save or reload to see response details.
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        createApp({
+            data() {
+                return {
+                    environments: ["PROD", "TEST", "SZKOL"],
+                    entries: [],
+                    result: null,
+                    lastSaved: null
+                };
+            },
+            mounted() {
+                this.reload();
+            },
+            methods: {
+                addEntry() {
+                    this.entries.push({
+                        id: crypto.randomUUID(),
+                        environment: "TEST",
+                        company: "KFT",
+                        runAtLocalTime: "02:00:00"
+                    });
+                },
+                removeEntry(index) {
+                    this.entries.splice(index, 1);
+                },
+                async reload() {
+                    this.result = { status: "Loading...", body: "Fetching schedule..." };
+                    try {
+                        const response = await fetch("/api/worker-schedule");
+                        const body = await response.text();
+                        this.result = { status: response.status, body: body || "<empty>" };
+                        if (response.ok) {
+                            const parsed = JSON.parse(body || "{}");
+                            const list = parsed.workerSchedule?.environments ?? [];
+                            this.entries = list.map(entry => ({
+                                id: crypto.randomUUID(),
+                                environment: entry.environment ?? "TEST",
+                                company: entry.company ?? "KFT",
+                                runAtLocalTime: entry.runAtLocalTime ?? "02:00:00"
+                            }));
+                        }
+                    } catch (error) {
+                        this.result = { status: "Error", body: error.toString() };
+                    }
+                },
+                async save() {
+                    const payload = {
+                        workerSchedule: {
+                            environments: this.entries.map(entry => ({
+                                environment: entry.environment,
+                                company: entry.company,
+                                runAtLocalTime: entry.runAtLocalTime
+                            }))
+                        }
+                    };
+
+                    this.result = { status: "Saving...", body: JSON.stringify(payload, null, 2) };
+                    try {
+                        const response = await fetch("/api/worker-schedule", {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload)
+                        });
+                        const body = await response.text();
+                        this.result = { status: response.status, body: body || "<empty>" };
+                        if (response.ok) {
+                            this.lastSaved = new Date().toLocaleString();
+                        }
+                    } catch (error) {
+                        this.result = { status: "Error", body: error.toString() };
+                    }
+                }
+            }
+        }).mount("#app");
+    </script>
+</body>
+</html>

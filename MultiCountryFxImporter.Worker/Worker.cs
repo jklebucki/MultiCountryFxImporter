@@ -11,149 +11,207 @@ public class Worker : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly WorkerOptions _workerOptions;
     private readonly CurrencyRatesApiOptions _apiOptions;
+    private readonly IOptionsMonitor<WorkerScheduleOptions> _scheduleMonitor;
+    private readonly Dictionary<string, DateOnly> _lastRunDates = new(StringComparer.OrdinalIgnoreCase);
 
     public Worker(
         ILogger<Worker> logger,
         IServiceProvider serviceProvider,
         IOptions<WorkerOptions> workerOptions,
-        IOptions<CurrencyRatesApiOptions> apiOptions)
+        IOptions<CurrencyRatesApiOptions> apiOptions,
+        IOptionsMonitor<WorkerScheduleOptions> scheduleMonitor)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _workerOptions = workerOptions.Value;
         _apiOptions = apiOptions.Value;
+        _scheduleMonitor = scheduleMonitor;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while(!stoppingToken.IsCancellationRequested)
+        var pollInterval = TimeSpan.FromSeconds(30);
+
+        while (!stoppingToken.IsCancellationRequested)
         {
-            var delay = GetDelayUntilNextRun();
-            if (delay > TimeSpan.Zero)
+            var schedule = _scheduleMonitor.CurrentValue?.Environments ?? new List<WorkerScheduleEntry>();
+            var configuredEnvironments = new HashSet<string>(
+                schedule.Select(entry => entry.Environment).Where(value => !string.IsNullOrWhiteSpace(value)),
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var key in _lastRunDates.Keys.Where(key => !configuredEnvironments.Contains(key)).ToList())
             {
-                _logger.LogInformation("Next run scheduled in {Delay}.", delay);
-                await Task.Delay(delay, stoppingToken);
+                _lastRunDates.Remove(key);
             }
 
-            using var scope = _serviceProvider.CreateScope();
-            var importer = scope.ServiceProvider.GetRequiredService<ICurrencyImporter>();
-            var apiClient = scope.ServiceProvider.GetRequiredService<ICurrencyRatesApiClient>();
-
-            IReadOnlyList<CompanyCurrencyDefinition> companyCurrencies;
-            try
+            if (schedule.Count == 0)
             {
-                companyCurrencies = await apiClient.GetCompanyCurrenciesAsync(
-                    _apiOptions.IfsEnvironment,
-                    _workerOptions.Company,
-                    stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to load company currencies for {Company}.", _workerOptions.Company);
+                await Task.Delay(pollInterval, stoppingToken);
                 continue;
             }
 
-            var companyCurrencyMap = companyCurrencies
-                .Where(item => !string.IsNullOrWhiteSpace(item.CurrencyCode))
-                .GroupBy(item => item.CurrencyCode, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-
-            if (companyCurrencyMap.Count == 0)
+            var now = DateTimeOffset.Now;
+            foreach (var entry in schedule)
             {
-                _logger.LogWarning("Company currency list is empty for {Company}.", _workerOptions.Company);
-                continue;
-            }
-
-            IEnumerable<FxRate> rates;
-            try
-            {
-                rates = await importer.ImportAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to fetch rates from source.");
-                continue;
-            }
-
-            var filteredRates = rates
-                .Where(rate => companyCurrencyMap.ContainsKey(rate.Currency))
-                .ToList();
-
-            if (filteredRates.Count == 0)
-            {
-                _logger.LogWarning("No matching rates found for company {Company}.", _workerOptions.Company);
-                continue;
-            }
-
-            var missingCurrencies = companyCurrencyMap.Keys
-                .Except(filteredRates.Select(rate => rate.Currency), StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            if (missingCurrencies.Count > 0)
-            {
-                _logger.LogInformation(
-                    "Missing rates for {Count} currencies: {Currencies}.",
-                    missingCurrencies.Count,
-                    string.Join(", ", missingCurrencies));
-            }
-
-            foreach (var group in filteredRates.GroupBy(rate => rate.Date))
-            {
-                var request = new CurrencyRatesImportRequest
+                if (string.IsNullOrWhiteSpace(entry.Environment))
                 {
-                    Company = _workerOptions.Company,
-                    CurrencyType = _workerOptions.CurrencyType,
-                    ValidFrom = group.Key.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                    Rates = group.Select(rate =>
-                    {
-                        var definition = companyCurrencyMap[rate.Currency];
-                        var round = definition.DecimalsInRate ?? _workerOptions.DefaultDirectCurrencyRateRound;
-                        var convFactor = definition.ConvFactor != 0 ? definition.ConvFactor : rate.RateUnit;
-
-                        return new CurrencyRatesImportRate
-                        {
-                            CurrencyCode = rate.Currency,
-                            CurrencyRate = rate.Rate,
-                            ConvFactor = convFactor,
-                            RefCurrencyCode = _workerOptions.RefCurrencyCode,
-                            DirectCurrencyRate = rate.Rate,
-                            DirectCurrencyRateRound = round,
-                            CTableNo = "MNB"
-                        };
-                    }).ToList()
-                };
-
-                try
-                {
-                    var response = await apiClient.ImportRatesAsync(
-                        _apiOptions.IfsEnvironment,
-                        request,
-                        stoppingToken);
-
-                    LogImportResponse(response, request);
+                    _logger.LogWarning("Worker schedule entry missing environment.");
+                    continue;
                 }
-                catch (Exception ex)
+
+                if (!TimeOnly.TryParse(entry.RunAtLocalTime, CultureInfo.InvariantCulture, DateTimeStyles.None, out var runTime))
                 {
-                    _logger.LogError(
-                        ex,
-                        "Import failed for {Company} on {Date}.",
-                        _workerOptions.Company,
-                        request.ValidFrom);
+                    _logger.LogWarning(
+                        "Invalid RunAtLocalTime '{RunAtLocalTime}' for environment {Environment}.",
+                        entry.RunAtLocalTime,
+                        entry.Environment);
+                    continue;
                 }
+
+                var scheduledToday = now.Date.Add(runTime.ToTimeSpan());
+                if (now < scheduledToday)
+                {
+                    continue;
+                }
+
+                var today = DateOnly.FromDateTime(now.Date);
+                if (_lastRunDates.TryGetValue(entry.Environment, out var lastRun) && lastRun == today)
+                {
+                    continue;
+                }
+
+                await ProcessEnvironmentAsync(entry, stoppingToken);
+                _lastRunDates[entry.Environment] = today;
             }
+
+            await Task.Delay(pollInterval, stoppingToken);
         }
     }
 
-    private TimeSpan GetDelayUntilNextRun()
+    private async Task ProcessEnvironmentAsync(WorkerScheduleEntry entry, CancellationToken stoppingToken)
     {
-        var now = DateTimeOffset.Now;
-        var target = now.Date.Add(_workerOptions.RunAtLocalTime.ToTimeSpan());
-        if (target <= now)
+        var environment = entry.Environment;
+        var company = !string.IsNullOrWhiteSpace(entry.Company) ? entry.Company : _workerOptions.Company;
+        if (string.IsNullOrWhiteSpace(company))
         {
-            target = target.AddDays(1);
+            _logger.LogWarning("Company is missing for environment {Environment}.", environment);
+            return;
         }
 
-        return target - now;
+        _logger.LogInformation("Starting import for {Company} in {Environment}.", company, environment);
+
+        using var scope = _serviceProvider.CreateScope();
+        var importer = scope.ServiceProvider.GetRequiredService<ICurrencyImporter>();
+        var apiClient = scope.ServiceProvider.GetRequiredService<ICurrencyRatesApiClient>();
+
+        IReadOnlyList<CompanyCurrencyDefinition> companyCurrencies;
+        try
+        {
+            companyCurrencies = await apiClient.GetCompanyCurrenciesAsync(
+                environment,
+                company,
+                stoppingToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load company currencies for {Company} ({Environment}).", company, environment);
+            return;
+        }
+
+        var companyCurrencyMap = companyCurrencies
+            .Where(item => !string.IsNullOrWhiteSpace(item.CurrencyCode))
+            .GroupBy(item => item.CurrencyCode, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        if (companyCurrencyMap.Count == 0)
+        {
+            _logger.LogWarning("Company currency list is empty for {Company} ({Environment}).", company, environment);
+            return;
+        }
+
+        var currencyNames = string.Join(",", companyCurrencyMap.Keys);
+
+        IEnumerable<FxRate> rates;
+        try
+        {
+            rates = await importer.ImportAsync(null, null, currencyNames);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch rates from source for {Environment}.", environment);
+            return;
+        }
+
+        var filteredRates = rates
+            .Where(rate => companyCurrencyMap.ContainsKey(rate.Currency))
+            .ToList();
+
+        if (filteredRates.Count == 0)
+        {
+            _logger.LogWarning("No matching rates found for company {Company} ({Environment}).", company, environment);
+            return;
+        }
+
+        var missingCurrencies = companyCurrencyMap.Keys
+            .Except(filteredRates.Select(rate => rate.Currency), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (missingCurrencies.Count > 0)
+        {
+            _logger.LogInformation(
+                "Missing rates for {Count} currencies ({Environment}): {Currencies}.",
+                missingCurrencies.Count,
+                environment,
+                string.Join(", ", missingCurrencies));
+        }
+
+        foreach (var group in filteredRates.GroupBy(rate => rate.Date))
+        {
+            var request = new CurrencyRatesImportRequest
+            {
+                Company = company,
+                CurrencyType = _workerOptions.CurrencyType,
+                ValidFrom = group.Key.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                Rates = group.Select(rate =>
+                {
+                    var definition = companyCurrencyMap[rate.Currency];
+                    var round = definition.DecimalsInRate ?? _workerOptions.DefaultDirectCurrencyRateRound;
+                    var convFactor = definition.ConvFactor != 0 ? definition.ConvFactor : rate.RateUnit;
+
+                    return new CurrencyRatesImportRate
+                    {
+                        CurrencyCode = rate.Currency,
+                        CurrencyRate = rate.Rate,
+                        ConvFactor = convFactor,
+                        RefCurrencyCode = _workerOptions.RefCurrencyCode,
+                        DirectCurrencyRate = rate.Rate,
+                        DirectCurrencyRateRound = round,
+                        CTableNo = "MNB"
+                    };
+                }).ToList()
+            };
+
+            try
+            {
+                var response = await apiClient.ImportRatesAsync(
+                    environment,
+                    request,
+                    stoppingToken);
+
+                LogImportResponse(response, request);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Import failed for {Company} on {Date} ({Environment}).",
+                    company,
+                    request.ValidFrom,
+                    environment);
+            }
+        }
+
+        _logger.LogInformation("Finished import for {Company} in {Environment}.", company, environment);
     }
 
     private void LogImportResponse(CurrencyRatesImportResponse response, CurrencyRatesImportRequest request)

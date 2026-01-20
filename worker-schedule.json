@@ -1,0 +1,11 @@
+{
+  "workerSchedule": {
+    "environments": [
+      {
+        "environment": "TEST",
+        "company": "KFT",
+        "runAtLocalTime": "12:05:00"
+      }
+    ]
+  }
+}
