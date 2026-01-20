@@ -41,6 +41,9 @@ mkdir -p "${PUBLISH_DIR}"
 dotnet publish "${ROOT_DIR}/MultiCountryFxImporter.Api/MultiCountryFxImporter.Api.csproj" -c Release -o "${PUBLISH_DIR}/MultiCountryFxImporter.Api"
 dotnet publish "${ROOT_DIR}/MultiCountryFxImporter.Worker/MultiCountryFxImporter.Worker.csproj" -c Release -o "${PUBLISH_DIR}/MultiCountryFxImporter.Worker"
 
+echo "Adjusting ownership for publish directories..."
+chown -R www-data:www-data "${PUBLISH_DIR}"
+
 echo "Starting services..."
 systemctl start multicountryfx-api.service
 systemctl start multicountryfx-worker.service

@@ -3,15 +3,10 @@ set -euo pipefail
 
 # Ubuntu 24.04 systemd service setup for API and Worker.
 # Usage:
-#   sudo ./setup-services.sh /opt/MultiCountryFxImporter youruser
+#   sudo ./setup-services.sh /opt/MultiCountryFxImporter
 
 APP_DIR="${1:-/opt/MultiCountryFxImporter}"
-RUN_AS_USER="${2:-$SUDO_USER}"
-
-if [[ -z "${RUN_AS_USER}" ]]; then
-  echo "Run as sudo and pass the username, e.g. sudo ./setup-services.sh /opt/MultiCountryFxImporter myuser"
-  exit 1
-fi
+RUN_AS_USER="www-data"
 
 API_DLL="${APP_DIR}/publish/MultiCountryFxImporter.Api/MultiCountryFxImporter.Api.dll"
 WORKER_DLL="${APP_DIR}/publish/MultiCountryFxImporter.Worker/MultiCountryFxImporter.Worker.dll"
@@ -26,6 +21,9 @@ if [[ ! -f "${API_DLL}" || ! -f "${WORKER_DLL}" ]]; then
   echo "  dotnet publish MultiCountryFxImporter.Worker/MultiCountryFxImporter.Worker.csproj -c Release -o ${APP_DIR}/publish/MultiCountryFxImporter.Worker"
   exit 1
 fi
+
+echo "Adjusting ownership for publish directories..."
+chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${APP_DIR}/publish"
 
 cat > /etc/systemd/system/multicountryfx-api.service <<EOF
 [Unit]
