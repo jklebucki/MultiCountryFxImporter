@@ -43,7 +43,7 @@ public class Worker : BackgroundService
             try
             {
                 companyCurrencies = await apiClient.GetCompanyCurrenciesAsync(
-                    _apiOptions.CurrencyCodesEnvironment,
+                    _apiOptions.IfsEnvironment,
                     _workerOptions.Company,
                     stoppingToken);
             }
@@ -118,7 +118,7 @@ public class Worker : BackgroundService
                             RefCurrencyCode = _workerOptions.RefCurrencyCode,
                             DirectCurrencyRate = rate.Rate,
                             DirectCurrencyRateRound = round,
-                            CTableNo = string.Empty
+                            CTableNo = "MNB"
                         };
                     }).ToList()
                 };
@@ -126,7 +126,7 @@ public class Worker : BackgroundService
                 try
                 {
                     var response = await apiClient.ImportRatesAsync(
-                        _apiOptions.ImportEnvironment,
+                        _apiOptions.IfsEnvironment,
                         request,
                         stoppingToken);
 

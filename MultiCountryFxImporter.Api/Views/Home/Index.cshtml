@@ -1,0 +1,203 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Currency Rates API Console</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
+    <div id="app" class="max-w-6xl mx-auto px-6 py-10">
+        <header class="mb-10">
+            <p class="text-sm uppercase tracking-[0.25em] text-indigo-200/70">MultiCountryFxImporter</p>
+            <h1 class="text-4xl md:text-5xl font-semibold text-white mt-2">Currency Rates API Console</h1>
+            <p class="text-slate-300 mt-4 max-w-2xl">
+                Interactive dashboard for the API endpoints. Trigger imports, fetch CSV outputs, and inspect detailed results
+                without leaving the browser.
+            </p>
+        </header>
+
+        <section class="grid gap-6 md:grid-cols-2">
+            <div class="bg-slate-900/70 border border-slate-700/60 rounded-2xl p-6 shadow-lg">
+                <h2 class="text-xl font-semibold text-white">Import Current Rates</h2>
+                <p class="text-sm text-slate-300 mt-2">
+                    Pushes the latest rates from MNB into IFS for the selected company.
+                </p>
+                <div class="mt-4 space-y-3">
+                    <div>
+                        <label class="text-xs uppercase text-slate-400">Company</label>
+                        <input v-model="current.company" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                        <label class="text-xs uppercase text-slate-400">Environment</label>
+                        <select v-model="current.environment" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                            <option v-for="env in environments" :key="env" :value="env">{{ env }}</option>
+                        </select>
+                    </div>
+                    <button class="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2 rounded-lg transition" @@click="runCurrent">
+                        Run Import
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/70 border border-slate-700/60 rounded-2xl p-6 shadow-lg">
+                <h2 class="text-xl font-semibold text-white">Import Rates for Date</h2>
+                <p class="text-sm text-slate-300 mt-2">
+                    Imports rates for a specific day from MNB (requires IFS currency list).
+                </p>
+                <div class="mt-4 space-y-3">
+                    <div>
+                        <label class="text-xs uppercase text-slate-400">Company</label>
+                        <input v-model="dateImport.company" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                        <label class="text-xs uppercase text-slate-400">Date (yyyy-MM-dd)</label>
+                        <input v-model="dateImport.date" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                        <label class="text-xs uppercase text-slate-400">Environment</label>
+                        <select v-model="dateImport.environment" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                            <option v-for="env in environments" :key="env" :value="env">{{ env }}</option>
+                        </select>
+                    </div>
+                    <button class="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-2 rounded-lg transition" @@click="runDateImport">
+                        Run Import
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/70 border border-slate-700/60 rounded-2xl p-6 shadow-lg">
+                <h2 class="text-xl font-semibold text-white">Fetch CSV (Current)</h2>
+                <p class="text-sm text-slate-300 mt-2">
+                    Downloads current rates from MNB and returns a CSV file.
+                </p>
+                <div class="mt-4 space-y-3">
+                    <button class="w-full bg-slate-200 text-slate-900 font-semibold py-2 rounded-lg hover:bg-white transition" @@click="runCsvCurrent">
+                        Fetch CSV
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/70 border border-slate-700/60 rounded-2xl p-6 shadow-lg">
+                <h2 class="text-xl font-semibold text-white">Fetch CSV for Date</h2>
+                <p class="text-sm text-slate-300 mt-2">
+                    Downloads rates for a specific day, with optional currency filter.
+                </p>
+                <div class="mt-4 space-y-3">
+                    <div>
+                        <label class="text-xs uppercase text-slate-400">Date (yyyy-MM-dd)</label>
+                        <input v-model="csvDate.date" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                        <label class="text-xs uppercase text-slate-400">Currencies (comma separated)</label>
+                        <input v-model="csvDate.currencies" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                    <button class="w-full bg-sky-500 hover:bg-sky-400 text-white font-semibold py-2 rounded-lg transition" @@click="runCsvDate">
+                        Fetch CSV
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-10 bg-slate-950/70 border border-slate-800 rounded-2xl p-6">
+            <div class="flex items-center justify-between gap-4">
+                <h2 class="text-xl font-semibold text-white">Latest Result</h2>
+                <button class="text-xs uppercase tracking-wide text-slate-400 hover:text-slate-200" @@click="clearResult">
+                    Clear
+                </button>
+            </div>
+            <div v-if="result" class="mt-4 space-y-4">
+                <div class="text-sm text-slate-300">
+                    <p><span class="text-slate-400">Endpoint:</span> {{ result.url }}</p>
+                    <p><span class="text-slate-400">Status:</span> {{ result.status }} {{ result.statusText }}</p>
+                    <p><span class="text-slate-400">Timestamp:</span> {{ result.timestamp }}</p>
+                </div>
+                <div v-if="result.isCsv" class="space-y-2">
+                    <p class="text-slate-300 text-sm">CSV Preview</p>
+                    <pre class="bg-slate-900 rounded-lg p-3 text-xs text-slate-200 overflow-auto">{{ result.body }}</pre>
+                </div>
+                <div v-else class="space-y-2">
+                    <p class="text-slate-300 text-sm">Response Body</p>
+                    <pre class="bg-slate-900 rounded-lg p-3 text-xs text-slate-200 overflow-auto">{{ result.body }}</pre>
+                </div>
+            </div>
+            <div v-else class="mt-4 text-sm text-slate-400">
+                Run an action to see detailed output.
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        createApp({
+            data() {
+                return {
+                    environments: ["PROD", "TEST", "SZKOL"],
+                    current: { company: "KFT", environment: "TEST" },
+                    dateImport: { company: "KFT", date: "2026-01-19", environment: "TEST" },
+                    csvDate: { date: "2026-01-19", currencies: "EUR,USD,CHF" },
+                    result: null
+                };
+            },
+            methods: {
+                async runCurrent() {
+                    const url = `/api/CurrencyRatesImport/current?company=${encodeURIComponent(this.current.company)}&environment=${encodeURIComponent(this.current.environment)}`;
+                    await this.callApi(url, { method: "POST" }, false);
+                },
+                async runDateImport() {
+                    const url = `/api/CurrencyRatesImport/date?company=${encodeURIComponent(this.dateImport.company)}&date=${encodeURIComponent(this.dateImport.date)}&environment=${encodeURIComponent(this.dateImport.environment)}`;
+                    await this.callApi(url, { method: "POST" }, false);
+                },
+                async runCsvCurrent() {
+                    await this.callApi(`/api/FxRate/csv`, { method: "GET" }, true);
+                },
+                async runCsvDate() {
+                    const params = new URLSearchParams({ date: this.csvDate.date });
+                    if (this.csvDate.currencies) {
+                        params.set("currencies", this.csvDate.currencies);
+                    }
+                    await this.callApi(`/api/FxRate/csv/date?${params.toString()}`, { method: "GET" }, true);
+                },
+                async callApi(url, options, isCsv) {
+                    this.result = {
+                        url,
+                        status: "Pending",
+                        statusText: "",
+                        timestamp: new Date().toLocaleString(),
+                        isCsv,
+                        body: "Waiting for response..."
+                    };
+                    try {
+                        const response = await fetch(url, options);
+                        const body = isCsv ? await response.text() : await response.text();
+                        this.result = {
+                            url,
+                            status: response.status,
+                            statusText: response.statusText,
+                            timestamp: new Date().toLocaleString(),
+                            isCsv,
+                            body: body || "<empty>"
+                        };
+                    } catch (error) {
+                        this.result = {
+                            url,
+                            status: "Error",
+                            statusText: "",
+                            timestamp: new Date().toLocaleString(),
+                            isCsv,
+                            body: error.toString()
+                        };
+                    }
+                },
+                clearResult() {
+                    this.result = null;
+                }
+            }
+        }).mount("#app");
+    </script>
+</body>
+</html>
