@@ -68,7 +68,7 @@
                     </div>
                     <div>
                         <label class="text-xs uppercase text-slate-400">Date (yyyy-MM-dd)</label>
-                        <input v-model="dateImport.date" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                        <input type="date" v-model="dateImport.date" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
                     </div>
                     <div>
                         <label class="text-xs uppercase text-slate-400">Environment</label>
@@ -102,7 +102,7 @@
                 <div class="mt-4 space-y-3">
                     <div>
                         <label class="text-xs uppercase text-slate-400">Date (yyyy-MM-dd)</label>
-                        <input v-model="csvDate.date" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                        <input type="date" v-model="csvDate.date" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
                     </div>
                     <div>
                         <label class="text-xs uppercase text-slate-400">Currencies (comma separated)</label>
@@ -156,19 +156,37 @@
                 };
             },
             methods: {
+                normalizeDate(value) {
+                    if (!value) {
+                        return "";
+                    }
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                        return value;
+                    }
+                    const parsed = new Date(value);
+                    if (Number.isNaN(parsed.getTime())) {
+                        return value;
+                    }
+                    const year = parsed.getFullYear();
+                    const month = `${parsed.getMonth() + 1}`.padStart(2, "0");
+                    const day = `${parsed.getDate()}`.padStart(2, "0");
+                    return `${year}-${month}-${day}`;
+                },
                 async runCurrent() {
                     const url = `/api/CurrencyRatesImport/current?company=${encodeURIComponent(this.current.company)}&environment=${encodeURIComponent(this.current.environment)}`;
                     await this.callApi(url, { method: "POST" }, false);
                 },
                 async runDateImport() {
-                    const url = `/api/CurrencyRatesImport/date?company=${encodeURIComponent(this.dateImport.company)}&date=${encodeURIComponent(this.dateImport.date)}&environment=${encodeURIComponent(this.dateImport.environment)}`;
+                    const date = this.normalizeDate(this.dateImport.date);
+                    const url = `/api/CurrencyRatesImport/date?company=${encodeURIComponent(this.dateImport.company)}&date=${encodeURIComponent(date)}&environment=${encodeURIComponent(this.dateImport.environment)}`;
                     await this.callApi(url, { method: "POST" }, false);
                 },
                 async runCsvCurrent() {
                     await this.callApi(`/api/FxRate/csv`, { method: "GET" }, true);
                 },
                 async runCsvDate() {
-                    const params = new URLSearchParams({ date: this.csvDate.date });
+                    const date = this.normalizeDate(this.csvDate.date);
+                    const params = new URLSearchParams({ date });
                     if (this.csvDate.currencies) {
                         params.set("currencies", this.csvDate.currencies);
                     }
