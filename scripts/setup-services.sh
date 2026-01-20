@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage:
 #   sudo ./setup-services.sh /opt/MultiCountryFxImporter
 
-APP_DIR="${1:-/opt/MultiCountryFxImporter}"
+APP_DIR="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 RUN_AS_USER="www-data"
 
 API_DLL="${APP_DIR}/publish/MultiCountryFxImporter.Api/MultiCountryFxImporter.Api.dll"

@@ -45,12 +45,8 @@ dotnet publish "${ROOT_DIR}/MultiCountryFxImporter.Worker/MultiCountryFxImporter
 echo "Adjusting ownership for publish directories..."
 chown -R www-data:www-data "${PUBLISH_DIR}"
 
-if [[ -x "${SETUP_SCRIPT}" ]]; then
-  echo "Refreshing systemd services..."
-  sudo "${SETUP_SCRIPT}" "${ROOT_DIR}"
-else
-  echo "setup-services.sh not executable. Run: chmod +x ${SETUP_SCRIPT}"
-fi
+echo "Refreshing systemd services..."
+bash "${SETUP_SCRIPT}" "${ROOT_DIR}"
 
 echo "Starting services..."
 systemctl start multicountryfx-api.service
