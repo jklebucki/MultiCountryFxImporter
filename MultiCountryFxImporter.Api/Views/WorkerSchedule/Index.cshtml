@@ -106,9 +106,15 @@
                 this.reload();
             },
             methods: {
+                generateId() {
+                    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+                        return window.crypto.randomUUID();
+                    }
+                    return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+                },
                 addEntry() {
                     this.entries.push({
-                        id: crypto.randomUUID(),
+                        id: this.generateId(),
                         environment: "TEST",
                         company: "KFT",
                         runAtLocalTime: "02:00:00"
@@ -127,7 +133,7 @@
                             const parsed = JSON.parse(body || "{}");
                             const list = parsed.workerSchedule?.environments ?? [];
                             this.entries = list.map(entry => ({
-                                id: crypto.randomUUID(),
+                                id: this.generateId(),
                                 environment: entry.environment ?? "TEST",
                                 company: entry.company ?? "KFT",
                                 runAtLocalTime: entry.runAtLocalTime ?? "02:00:00"
