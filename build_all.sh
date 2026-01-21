@@ -110,8 +110,6 @@ backup_worker_schedule
 
 echo "Pulling latest changes..."
 git -C "${ROOT_DIR}" pull
-echo "Restoring worker schedule..."
-restore_worker_schedule
 
 echo "Publishing projects..."
 echo "Backing up worker configuration..."
@@ -125,6 +123,8 @@ mkdir -p "${PUBLISH_DIR}"
 dotnet publish "${ROOT_DIR}/MultiCountryFxImporter.Api/MultiCountryFxImporter.Api.csproj" -c Release -o "${PUBLISH_DIR}/MultiCountryFxImporter.Api"
 dotnet publish "${ROOT_DIR}/MultiCountryFxImporter.Worker/MultiCountryFxImporter.Worker.csproj" -c Release -o "${PUBLISH_DIR}/MultiCountryFxImporter.Worker"
 
+echo "Restoring worker schedule..."
+restore_worker_schedule
 echo "Restoring worker configuration..."
 restore_worker_config
 echo "Restoring worker logs..."
