@@ -17,4 +17,8 @@
     <ProjectReference Include="..\MultiCountryFxImporter.Infrastructure\MultiCountryFxImporter.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Views\**\*.cshtml" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
