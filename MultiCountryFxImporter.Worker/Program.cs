@@ -20,7 +20,7 @@ builder.Services.AddSerilog((_, configuration) =>
         .ReadFrom.Configuration(builder.Configuration)
         .WriteTo.File(
             "logs/worker-.log",
-            rollingInterval: RollingInterval.Week,
+            rollingInterval: RollingInterval.Day,
             retainedFileTimeLimit: TimeSpan.FromDays(90))
         .WriteTo.Console();
 });
