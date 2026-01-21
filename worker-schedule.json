@@ -5,6 +5,11 @@
         "environment": "TEST",
         "company": "KFT",
         "runAtLocalTime": "12:05:00"
+      },
+      {
+        "environment": "SZKOL",
+        "company": "KFT",
+        "runAtLocalTime": "12:06:00"
       }
     ]
   }
