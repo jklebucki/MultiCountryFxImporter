@@ -32,6 +32,7 @@ CONFIG_BACKUP_DIR="${ROOT_DIR}/.deploy-config-backup/worker"
 LOGS_BACKUP_DIR="${ROOT_DIR}/.deploy-logs-backup/worker"
 WORKER_LOGS_DIR="${WORKER_PUBLISH_DIR}/logs"
 WORKER_SCHEDULE_FILE="${ROOT_DIR}/worker-schedule.json"
+WORKER_SCHEDULE_PUBLISH_FILE="${PUBLISH_DIR}/worker-schedule.json"
 WORKER_SCHEDULE_BACKUP="${CONFIG_BACKUP_DIR}/worker-schedule.json"
 WORKER_CONFIG_FILES=(
   "appsettings.json"
@@ -64,14 +65,22 @@ restore_worker_config() {
 }
 
 backup_worker_schedule() {
-  if [[ -f "${WORKER_SCHEDULE_FILE}" ]]; then
+  local source=""
+  if [[ -f "${WORKER_SCHEDULE_PUBLISH_FILE}" ]]; then
+    source="${WORKER_SCHEDULE_PUBLISH_FILE}"
+  elif [[ -f "${WORKER_SCHEDULE_FILE}" ]]; then
+    source="${WORKER_SCHEDULE_FILE}"
+  fi
+  if [[ -n "${source}" ]]; then
     mkdir -p "${CONFIG_BACKUP_DIR}"
-    cp -a "${WORKER_SCHEDULE_FILE}" "${WORKER_SCHEDULE_BACKUP}"
+    cp -a "${source}" "${WORKER_SCHEDULE_BACKUP}"
   fi
 }
 
 restore_worker_schedule() {
   if [[ -f "${WORKER_SCHEDULE_BACKUP}" ]]; then
+    mkdir -p "${PUBLISH_DIR}"
+    cp -a "${WORKER_SCHEDULE_BACKUP}" "${WORKER_SCHEDULE_PUBLISH_FILE}"
     cp -a "${WORKER_SCHEDULE_BACKUP}" "${WORKER_SCHEDULE_FILE}"
   fi
 }

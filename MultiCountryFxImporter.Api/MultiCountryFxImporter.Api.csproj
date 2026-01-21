@@ -4,6 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <MvcRazorExcludeViewFilesFromPublish>false</MvcRazorExcludeViewFilesFromPublish>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,10 +16,6 @@
   <ItemGroup>
     <ProjectReference Include="..\MultiCountryFxImporter.Core\MultiCountryFxImporter.Core.csproj" />
     <ProjectReference Include="..\MultiCountryFxImporter.Infrastructure\MultiCountryFxImporter.Infrastructure.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Update="Views\**\*.cshtml" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
