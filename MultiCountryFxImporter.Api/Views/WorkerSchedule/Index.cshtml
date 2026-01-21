@@ -20,14 +20,25 @@
                     <p class="text-sm uppercase tracking-[0.25em] text-indigo-200/70">MultiCountryFxImporter</p>
                     <h1 class="text-4xl md:text-5xl font-semibold text-white mt-2">Worker Schedule</h1>
                 </div>
-                <nav class="flex flex-wrap gap-3">
-                    <a href="/" class="px-4 py-2 rounded-full border border-slate-600 text-slate-200 text-sm hover:bg-slate-800/50 transition">
-                        API Console
-                    </a>
-                    <a href="/worker-schedule" class="px-4 py-2 rounded-full border border-indigo-400/60 text-indigo-100 text-sm hover:bg-indigo-500/20 transition">
-                        Worker Schedule
-                    </a>
-                </nav>
+                <div class="flex items-center justify-between md:justify-end gap-3">
+                    <button class="md:hidden p-2 rounded-full border border-slate-600 text-slate-200 hover:bg-slate-800/50 transition" aria-label="Toggle menu" @@click="menuOpen = !menuOpen">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18M3 12h18M3 18h18"></path>
+                        </svg>
+                    </button>
+                    <nav class="flex flex-col md:flex-row flex-wrap gap-3"
+                         :class="menuOpen ? 'flex' : 'hidden md:flex'">
+                        <a href="/" class="px-4 py-2 rounded-full border border-slate-600 text-slate-200 text-sm hover:bg-slate-800/50 transition">
+                            API Console
+                        </a>
+                        <a href="/worker-schedule" class="px-4 py-2 rounded-full border border-indigo-400/60 text-indigo-100 text-sm hover:bg-indigo-500/20 transition">
+                            Worker Schedule
+                        </a>
+                        <a href="/logs" class="px-4 py-2 rounded-full border border-slate-600 text-slate-200 text-sm hover:bg-slate-800/50 transition">
+                            Logs
+                        </a>
+                    </nav>
+                </div>
             </div>
             <p class="text-slate-300 mt-4 max-w-2xl">
                 Configure which IFS environments should be handled by the worker and at what local time each environment executes.
@@ -98,6 +109,7 @@
         createApp({
             data() {
                 return {
+                    menuOpen: false,
                     environments: ["PROD", "TEST", "SZKOL"],
                     entries: [],
                     result: null,

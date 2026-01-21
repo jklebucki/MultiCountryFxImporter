@@ -18,7 +18,10 @@ builder.Services.AddSerilog((_, configuration) =>
 {
     configuration
         .ReadFrom.Configuration(builder.Configuration)
-        .WriteTo.File("logs/worker-.log", rollingInterval: RollingInterval.Month)
+        .WriteTo.File(
+            "logs/worker-.log",
+            rollingInterval: RollingInterval.Week,
+            retainedFileTimeLimit: TimeSpan.FromDays(90))
         .WriteTo.Console();
 });
 
