@@ -9,4 +9,10 @@ public class HomeController : Controller
     {
         return View();
     }
+
+    [HttpGet("/about")]
+    public IActionResult About()
+    {
+        return View();
+    }
 }
