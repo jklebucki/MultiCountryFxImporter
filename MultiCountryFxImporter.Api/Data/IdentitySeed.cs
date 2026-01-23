@@ -6,6 +6,7 @@ namespace MultiCountryFxImporter.Api.Data;
 public static class IdentitySeed
 {
     public const string AdminEmail = "it@citronex.pl";
+    public const string AdminUserName = "admin";
     public const string AdminPassword = "Citro@123!";
 
     public static readonly string[] Roles = { "User", "PowerAdmin", "Admin" };
@@ -29,12 +30,13 @@ public static class IdentitySeed
             }
         }
 
-        var adminUser = await userManager.FindByEmailAsync(AdminEmail);
+        var adminUser = await userManager.FindByNameAsync(AdminUserName)
+            ?? await userManager.FindByEmailAsync(AdminEmail);
         if (adminUser is null)
         {
             adminUser = new IdentityUser
             {
-                UserName = AdminEmail,
+                UserName = AdminUserName,
                 Email = AdminEmail,
                 EmailConfirmed = true
             };

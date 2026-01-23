@@ -1,68 +1,18 @@
 @{
-    Layout = null;
+    ViewData["Title"] = "Currency Rates API Console";
 }
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Currency Rates API Console</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+@section Styles {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
-    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-</head>
-<body class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-slate-100">
-    <div id="app" class="max-w-6xl mx-auto px-6 py-10">
-        <header class="mb-10">
-            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <p class="text-sm uppercase tracking-[0.25em] text-indigo-200/70">MultiCountryFxImporter</p>
-                    <h1 class="text-4xl md:text-5xl font-semibold text-white mt-2">Currency Rates API Console</h1>
-                </div>
-                <div class="flex items-center justify-between md:justify-end gap-3">
-                    <button class="md:hidden p-2 rounded-full border border-slate-600 text-slate-200 hover:bg-slate-800/50 transition" aria-label="Toggle menu" @@click="menuOpen = !menuOpen">
-                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M3 6h18M3 12h18M3 18h18"></path>
-                        </svg>
-                    </button>
-                    <nav class="flex flex-col md:flex-row flex-wrap gap-3"
-                         :class="menuOpen ? 'flex' : 'hidden md:flex'">
-                        <a href="/" class="px-4 py-2 rounded-full border border-indigo-400/60 text-indigo-100 text-sm hover:bg-indigo-500/20 transition">
-                            API Console
-                        </a>
-                        <a href="/worker-schedule" class="px-4 py-2 rounded-full border border-slate-600 text-slate-200 text-sm hover:bg-slate-800/50 transition">
-                            Worker Schedule
-                        </a>
-                        <a href="/logs" class="px-4 py-2 rounded-full border border-slate-600 text-slate-200 text-sm hover:bg-slate-800/50 transition">
-                            Logs
-                        </a>
-                        @if (User?.Identity?.IsAuthenticated == true)
-                        {
-                            <form method="post" action="/account/logout" class="inline">
-                                @Html.AntiForgeryToken()
-                                <button type="submit" class="px-4 py-2 rounded-full border border-rose-500/60 text-rose-100 text-sm hover:bg-rose-500/20 transition">
-                                    Sign out
-                                </button>
-                            </form>
-                        }
-                        else
-                        {
-                            <a href="/account/login" class="px-4 py-2 rounded-full border border-slate-600 text-slate-200 text-sm hover:bg-slate-800/50 transition">
-                                Sign in
-                            </a>
-                            <a href="/account/register" class="px-4 py-2 rounded-full border border-emerald-500/60 text-emerald-100 text-sm hover:bg-emerald-500/20 transition">
-                                Register
-                            </a>
-                        }
-                    </nav>
-                </div>
-            </div>
-            <p class="text-slate-300 mt-4 max-w-2xl">
-                Interactive dashboard for the API endpoints. Trigger imports, fetch CSV outputs, and inspect detailed results
-                without leaving the browser.
-            </p>
-        </header>
+}
+
+<div id="app">
+    <header class="mb-10">
+        <h1 class="text-4xl md:text-5xl font-semibold text-white mt-2">Currency Rates API Console</h1>
+        <p class="text-slate-300 mt-4 max-w-2xl">
+            Interactive dashboard for the API endpoints. Trigger imports, fetch CSV outputs, and inspect detailed results
+            without leaving the browser.
+        </p>
+    </header>
 
         <section class="grid gap-6 md:grid-cols-2">
             <div class="bg-slate-900/70 border border-slate-700/60 rounded-2xl p-6 shadow-lg">
@@ -174,12 +124,14 @@
         </section>
     </div>
 
+@section Scripts {
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script>
         const { createApp } = Vue;
         createApp({
             data() {
                 return {
-                    menuOpen: false,
                     environments: ["PROD", "TEST", "SZKOL"],
                     current: { company: "KFT", environment: "TEST" },
                     dateImport: { company: "KFT", date: "2026-01-19", environment: "TEST" },
@@ -346,5 +298,4 @@
             }
         }).mount("#app");
     </script>
-</body>
-</html>
+}
