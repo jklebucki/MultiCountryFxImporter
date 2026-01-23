@@ -43,8 +43,9 @@
                     <label class="text-xs uppercase text-slate-400">Password</label>
                     <input type="password" name="Password" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" autocomplete="current-password" />
                 </div>
+                <input type="hidden" name="RememberMe" value="false" />
                 <label class="flex items-center gap-2 text-sm text-slate-300">
-                    <input type="checkbox" name="RememberMe" class="rounded border-slate-600 bg-slate-900" />
+                    <input type="checkbox" name="RememberMe" value="true" class="rounded border-slate-600 bg-slate-900" @(Model?.RememberMe == true ? "checked" : "") />
                     Remember me
                 </label>
                 <button class="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2 rounded-lg transition" type="submit">
