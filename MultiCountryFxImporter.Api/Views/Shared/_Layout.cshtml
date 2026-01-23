@@ -27,6 +27,12 @@
                 <a href="/logs" class="px-4 py-2 rounded-full border border-slate-700 text-slate-200 hover:bg-slate-800/50 transition">
                     Logs
                 </a>
+                @if (User?.Identity?.IsAuthenticated == true && User.IsInRole("Admin"))
+                {
+                    <a href="/admin/users" class="px-4 py-2 rounded-full border border-amber-500/60 text-amber-100 hover:bg-amber-500/20 transition">
+                        Admin
+                    </a>
+                }
                 @if (User?.Identity?.IsAuthenticated == true)
                 {
                     <form method="post" action="/account/logout" class="inline">

@@ -9,6 +9,7 @@ namespace MultiCountryFxImporter.Api.Controllers;
 
 public class AccountController : Controller
 {
+    private const string PasswordResetRequiredClaim = "pwd_reset_required";
     private readonly UserManager<IdentityUser> _userManager;
     private readonly SignInManager<IdentityUser> _signInManager;
     private readonly IEmailSender _emailSender;
@@ -57,6 +58,12 @@ public class AccountController : Controller
         var result = await _signInManager.PasswordSignInAsync(user, model.Password, model.RememberMe, lockoutOnFailure: false);
         if (result.Succeeded)
         {
+            var claims = await _userManager.GetClaimsAsync(user);
+            if (claims.Any(claim => claim.Type == PasswordResetRequiredClaim && claim.Value == "true"))
+            {
+                return RedirectToAction("ChangePassword", new { returnUrl });
+            }
+
             if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
             {
                 return Redirect(returnUrl);
@@ -198,6 +205,58 @@ public class AccountController : Controller
         }
 
         return RedirectToAction("Login", "Account");
+    }
+
+    [HttpGet("/account/change-password")]
+    [Authorize]
+    public IActionResult ChangePassword(string? returnUrl = null)
+    {
+        ViewData["ReturnUrl"] = returnUrl;
+        return View("~/Views/Account/ChangePassword.cshtml");
+    }
+
+    [HttpPost("/account/change-password")]
+    [Authorize]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangePassword(ChangePasswordViewModel model, string? returnUrl = null)
+    {
+        ViewData["ReturnUrl"] = returnUrl;
+        if (!ModelState.IsValid)
+        {
+            return View("~/Views/Account/ChangePassword.cshtml", model);
+        }
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return RedirectToAction("Login", "Account");
+        }
+
+        var result = await _userManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
+        if (!result.Succeeded)
+        {
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error.Description);
+            }
+
+            return View("~/Views/Account/ChangePassword.cshtml", model);
+        }
+
+        var claims = await _userManager.GetClaimsAsync(user);
+        foreach (var claim in claims.Where(claim => claim.Type == PasswordResetRequiredClaim).ToList())
+        {
+            await _userManager.RemoveClaimAsync(user, claim);
+        }
+
+        await _signInManager.RefreshSignInAsync(user);
+
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+        {
+            return Redirect(returnUrl);
+        }
+
+        return RedirectToAction("Index", "Home");
     }
 
     [HttpGet("/account/access-denied")]

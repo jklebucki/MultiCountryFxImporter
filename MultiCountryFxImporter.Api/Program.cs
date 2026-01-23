@@ -116,6 +116,36 @@ app.UseHttpsRedirection();
 
 app.UseRouting();
 app.UseAuthentication();
+app.Use(async (context, next) =>
+{
+    if (context.User?.Identity?.IsAuthenticated == true)
+    {
+        var mustReset = context.User.HasClaim(claim => claim.Type == "pwd_reset_required" && claim.Value == "true");
+        if (mustReset)
+        {
+            var path = context.Request.Path;
+            if (path.StartsWithSegments("/account/change-password") ||
+                path.StartsWithSegments("/account/logout") ||
+                path.StartsWithSegments("/account/access-denied"))
+            {
+                await next();
+                return;
+            }
+
+            if (path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsync("Password reset required.");
+                return;
+            }
+
+            context.Response.Redirect("/account/change-password");
+            return;
+        }
+    }
+
+    await next();
+});
 app.UseAuthorization();
 
 app.MapControllers();

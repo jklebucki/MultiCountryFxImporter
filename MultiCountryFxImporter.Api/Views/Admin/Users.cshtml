@@ -1,0 +1,120 @@
+@model MultiCountryFxImporter.Api.Models.Admin.AdminUsersViewModel
+@{
+    ViewData["Title"] = "User Administration";
+}
+
+<header class="mb-10">
+    <h1 class="text-4xl md:text-5xl font-semibold text-white mt-2">User Administration</h1>
+    <p class="text-slate-300 mt-4 max-w-2xl">
+        Manage accounts, reset passwords, enforce password change, and assign roles.
+    </p>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(Model.StatusMessage))
+{
+    var isError = string.Equals(Model.StatusType, "error", StringComparison.OrdinalIgnoreCase);
+    <div class="mb-6 rounded-xl border @(isError ? "border-rose-500/40 bg-rose-500/10 text-rose-200" : "border-emerald-500/40 bg-emerald-500/10 text-emerald-200") p-3 text-sm">
+        @Model.StatusMessage
+    </div>
+}
+
+<section class="bg-slate-900/70 border border-slate-700/60 rounded-2xl p-6 shadow-lg">
+    <h2 class="text-xl font-semibold text-white">Create user</h2>
+    <form method="post" action="/admin/users/create" class="mt-4 grid gap-4 md:grid-cols-4">
+        @Html.AntiForgeryToken()
+        <input name="userName" placeholder="Username" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+        <input name="email" type="email" placeholder="Email" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+        <input name="password" type="password" placeholder="Password" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+        <div class="flex flex-col gap-2">
+            <div class="flex flex-wrap gap-2">
+                @foreach (var role in Model.AvailableRoles)
+                {
+                    <label class="text-xs text-slate-300 flex items-center gap-2">
+                        <input type="checkbox" name="roles" value="@role" class="rounded border-slate-600 bg-slate-900" />
+                        @role
+                    </label>
+                }
+            </div>
+            <label class="text-xs text-slate-300 flex items-center gap-2">
+                <input type="checkbox" name="requireReset" value="true" class="rounded border-slate-600 bg-slate-900" />
+                Require password reset on next login
+            </label>
+        </div>
+        <div class="md:col-span-4">
+            <button type="submit" class="px-5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white font-semibold transition">
+                Create user
+            </button>
+        </div>
+    </form>
+</section>
+
+<section class="mt-8 space-y-4">
+    @foreach (var user in Model.Users)
+    {
+        <div class="bg-slate-900/70 border border-slate-700/60 rounded-2xl p-6 shadow-lg">
+            <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-white">@user.UserName</h3>
+                    <p class="text-sm text-slate-300">@user.Email</p>
+                    <p class="text-xs text-slate-400">Roles: @(user.Roles.Count > 0 ? string.Join(", ", user.Roles) : "none")</p>
+                    <p class="text-xs text-slate-400">Password reset required: @(user.RequirePasswordReset ? "Yes" : "No")</p>
+                </div>
+                <form method="post" action="/admin/users/delete" class="inline">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="userId" value="@user.Id" />
+                    <button type="submit" class="px-4 py-2 rounded-lg border border-rose-500/60 text-rose-100 hover:bg-rose-500/20 transition">
+                        Delete
+                    </button>
+                </form>
+            </div>
+
+            <div class="mt-4 grid gap-4 md:grid-cols-3">
+                <form method="post" action="/admin/users/update-roles" class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="userId" value="@user.Id" />
+                    <p class="text-sm text-slate-200 font-semibold">Roles</p>
+                    <div class="flex flex-wrap gap-2">
+                        @foreach (var role in Model.AvailableRoles)
+                        {
+                            var isChecked = user.Roles.Contains(role, StringComparer.OrdinalIgnoreCase);
+                            <label class="text-xs text-slate-300 flex items-center gap-2">
+                                <input type="checkbox" name="roles" value="@role" class="rounded border-slate-600 bg-slate-900" @(isChecked ? "checked" : "") />
+                                @role
+                            </label>
+                        }
+                    </div>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-semibold transition">
+                        Update roles
+                    </button>
+                </form>
+
+                <form method="post" action="/admin/users/reset-password" class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="userId" value="@user.Id" />
+                    <p class="text-sm text-slate-200 font-semibold">Reset password</p>
+                    <input name="newPassword" type="password" placeholder="New password" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                    <label class="text-xs text-slate-300 flex items-center gap-2">
+                        <input type="checkbox" name="requireReset" value="true" class="rounded border-slate-600 bg-slate-900" />
+                        Require reset on next login
+                    </label>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-sm font-semibold transition">
+                        Set new password
+                    </button>
+                </form>
+
+                <form method="post" action="/admin/users/require-reset" class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="userId" value="@user.Id" />
+                    <p class="text-sm text-slate-200 font-semibold">Require reset</p>
+                    <div class="flex items-center gap-2 text-xs text-slate-300">
+                        <input type="checkbox" name="requireReset" value="true" class="rounded border-slate-600 bg-slate-900" @(user.RequirePasswordReset ? "checked" : "") />
+                        Force password change next login
+                    </div>
+                    <button type="submit" class="px-4 py-2 rounded-lg border border-slate-600 text-slate-200 text-sm hover:bg-slate-800/50 transition">
+                        Save
+                    </button>
+                </form>
+            </div>
+        </div>
+    }
+</section>
