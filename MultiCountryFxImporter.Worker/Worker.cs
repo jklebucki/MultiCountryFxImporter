@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.Extensions.Options;
 using MultiCountryFxImporter.Core.Interfaces;
 using MultiCountryFxImporter.Core.Models;
+using MultiCountryFxImporter.Worker.Services;
 
 namespace MultiCountryFxImporter.Worker;
 
@@ -12,6 +13,7 @@ public class Worker : BackgroundService
     private readonly WorkerOptions _workerOptions;
     private readonly CurrencyRatesApiOptions _apiOptions;
     private readonly IOptionsMonitor<WorkerScheduleOptions> _scheduleMonitor;
+    private readonly WorkerRunStateStore _stateStore;
     private readonly Dictionary<string, DateOnly> _lastRunDates = new(StringComparer.OrdinalIgnoreCase);
 
     public Worker(
@@ -19,29 +21,42 @@ public class Worker : BackgroundService
         IServiceProvider serviceProvider,
         IOptions<WorkerOptions> workerOptions,
         IOptions<CurrencyRatesApiOptions> apiOptions,
-        IOptionsMonitor<WorkerScheduleOptions> scheduleMonitor)
+        IOptionsMonitor<WorkerScheduleOptions> scheduleMonitor,
+        WorkerRunStateStore stateStore)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _workerOptions = workerOptions.Value;
         _apiOptions = apiOptions.Value;
         _scheduleMonitor = scheduleMonitor;
+        _stateStore = stateStore;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var pollInterval = TimeSpan.FromSeconds(30);
+        var persistedState = await _stateStore.ReadAsync(stoppingToken);
+        foreach (var entry in persistedState)
+        {
+            _lastRunDates[entry.Key] = entry.Value;
+        }
 
         while (!stoppingToken.IsCancellationRequested)
         {
             var schedule = _scheduleMonitor.CurrentValue?.Environments ?? new List<WorkerScheduleEntry>();
-            var configuredEnvironments = new HashSet<string>(
-                schedule.Select(entry => entry.Environment).Where(value => !string.IsNullOrWhiteSpace(value)),
+            var configuredKeys = new HashSet<string>(
+                schedule.Select(BuildKey).Where(value => !string.IsNullOrWhiteSpace(value)),
                 StringComparer.OrdinalIgnoreCase);
 
-            foreach (var key in _lastRunDates.Keys.Where(key => !configuredEnvironments.Contains(key)).ToList())
+            var removed = false;
+            foreach (var key in _lastRunDates.Keys.Where(key => !configuredKeys.Contains(key)).ToList())
             {
                 _lastRunDates.Remove(key);
+                removed = true;
+            }
+            if (removed)
+            {
+                await _stateStore.WriteAsync(_lastRunDates, stoppingToken);
             }
 
             if (schedule.Count == 0)
@@ -75,18 +90,44 @@ public class Worker : BackgroundService
                 }
 
                 var today = DateOnly.FromDateTime(now.Date);
-                if (_lastRunDates.TryGetValue(entry.Environment, out var lastRun) && lastRun == today)
+                var key = BuildKey(entry);
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    continue;
+                }
+
+                if (_lastRunDates.TryGetValue(key, out var lastRun) && lastRun == today)
                 {
                     continue;
                 }
 
                 await ProcessEnvironmentAsync(entry, stoppingToken);
-                _lastRunDates[entry.Environment] = today;
+                _lastRunDates[key] = today;
+                await _stateStore.WriteAsync(_lastRunDates, stoppingToken);
             }
 
             await Task.Delay(pollInterval, stoppingToken);
         }
     }
+
+    private string BuildKey(WorkerScheduleEntry entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.Environment))
+        {
+            return string.Empty;
+        }
+
+        var company = !string.IsNullOrWhiteSpace(entry.Company) ? entry.Company : _workerOptions.Company;
+        if (string.IsNullOrWhiteSpace(company))
+        {
+            return string.Empty;
+        }
+
+        return BuildKey(entry.Environment, company);
+    }
+
+    private static string BuildKey(string environment, string company)
+        => $"{environment.Trim().ToUpperInvariant()}|{company.Trim().ToUpperInvariant()}";
 
     private async Task ProcessEnvironmentAsync(WorkerScheduleEntry entry, CancellationToken stoppingToken)
     {

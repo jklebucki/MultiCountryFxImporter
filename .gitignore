@@ -718,6 +718,8 @@ Thumbs.db
 rates_*.csv
 # Ignore auth database files
 auth.db*
+# Ignore worker state file
+worker-run-state.json
 
 # Ignore user secrets
 **/secrets.json

@@ -4,6 +4,7 @@ using MultiCountryFxImporter.Infrastructure;
 using MultiCountryFxImporter.Core.Interfaces;
 using MultiCountryFxImporter.Core.Models;
 using Serilog;
+using MultiCountryFxImporter.Worker.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -39,6 +40,7 @@ builder.Services.AddHttpClient<ICurrencyRatesApiClient, CurrencyRatesApiClient>(
 });
 
 builder.Services.AddHostedService<Worker>();
+builder.Services.AddSingleton<WorkerRunStateStore>();
 builder.Services.AddScoped<ICurrencyImporter, MnbImporter>();
 builder.Services.AddScoped<MNBArfolyamServiceSoapClient>();
 

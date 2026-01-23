@@ -34,6 +34,9 @@ WORKER_LOGS_DIR="${WORKER_PUBLISH_DIR}/logs"
 WORKER_SCHEDULE_FILE="${ROOT_DIR}/worker-schedule.json"
 WORKER_SCHEDULE_PUBLISH_FILE="${PUBLISH_DIR}/worker-schedule.json"
 WORKER_SCHEDULE_BACKUP="${CONFIG_BACKUP_DIR}/worker-schedule.json"
+WORKER_RUN_STATE_FILE="${ROOT_DIR}/worker-run-state.json"
+WORKER_RUN_STATE_PUBLISH_FILE="${PUBLISH_DIR}/worker-run-state.json"
+WORKER_RUN_STATE_BACKUP="${CONFIG_BACKUP_DIR}/worker-run-state.json"
 AUTH_DB_PUBLISH_FILE="${PUBLISH_DIR}/auth.db"
 AUTH_DB_BACKUP="${CONFIG_BACKUP_DIR}/auth.db"
 AUTH_DB_WAL_BACKUP="${CONFIG_BACKUP_DIR}/auth.db-wal"
@@ -89,6 +92,27 @@ restore_worker_schedule() {
   fi
 }
 
+backup_worker_run_state() {
+  local source=""
+  if [[ -f "${WORKER_RUN_STATE_PUBLISH_FILE}" ]]; then
+    source="${WORKER_RUN_STATE_PUBLISH_FILE}"
+  elif [[ -f "${WORKER_RUN_STATE_FILE}" ]]; then
+    source="${WORKER_RUN_STATE_FILE}"
+  fi
+  if [[ -n "${source}" ]]; then
+    mkdir -p "${CONFIG_BACKUP_DIR}"
+    cp -a "${source}" "${WORKER_RUN_STATE_BACKUP}"
+  fi
+}
+
+restore_worker_run_state() {
+  if [[ -f "${WORKER_RUN_STATE_BACKUP}" ]]; then
+    mkdir -p "${PUBLISH_DIR}"
+    cp -a "${WORKER_RUN_STATE_BACKUP}" "${WORKER_RUN_STATE_PUBLISH_FILE}"
+    cp -a "${WORKER_RUN_STATE_BACKUP}" "${WORKER_RUN_STATE_FILE}"
+  fi
+}
+
 backup_auth_db() {
   if [[ -f "${AUTH_DB_PUBLISH_FILE}" ]]; then
     mkdir -p "${CONFIG_BACKUP_DIR}"
@@ -141,6 +165,8 @@ systemctl stop multicountryfx-worker.service || true
 
 echo "Backing up worker schedule..."
 backup_worker_schedule
+echo "Backing up worker run state..."
+backup_worker_run_state
 echo "Backing up auth database..."
 backup_auth_db
 
@@ -161,6 +187,8 @@ dotnet publish "${ROOT_DIR}/MultiCountryFxImporter.Worker/MultiCountryFxImporter
 
 echo "Restoring worker schedule..."
 restore_worker_schedule
+echo "Restoring worker run state..."
+restore_worker_run_state
 echo "Restoring auth database..."
 restore_auth_db
 echo "Restoring worker configuration..."
