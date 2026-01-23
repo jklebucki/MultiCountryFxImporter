@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using MultiCountryFxImporter.Api.Services;
@@ -8,6 +9,7 @@ namespace MultiCountryFxImporter.Api.Controllers;
 
 [ApiController]
 [Route("api/worker-schedule")]
+[Authorize(Roles = "Admin,PowerAdmin")]
 public class WorkerScheduleController : ControllerBase
 {
     private readonly WorkerScheduleStore _store;

@@ -716,6 +716,8 @@ Thumbs.db
 # Project-specific
 # Ignore generated CSV files from Worker
 rates_*.csv
+# Ignore auth database files
+auth.db*
 
 # Ignore user secrets
 **/secrets.json

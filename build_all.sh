@@ -34,6 +34,10 @@ WORKER_LOGS_DIR="${WORKER_PUBLISH_DIR}/logs"
 WORKER_SCHEDULE_FILE="${ROOT_DIR}/worker-schedule.json"
 WORKER_SCHEDULE_PUBLISH_FILE="${PUBLISH_DIR}/worker-schedule.json"
 WORKER_SCHEDULE_BACKUP="${CONFIG_BACKUP_DIR}/worker-schedule.json"
+AUTH_DB_PUBLISH_FILE="${PUBLISH_DIR}/auth.db"
+AUTH_DB_BACKUP="${CONFIG_BACKUP_DIR}/auth.db"
+AUTH_DB_WAL_BACKUP="${CONFIG_BACKUP_DIR}/auth.db-wal"
+AUTH_DB_SHM_BACKUP="${CONFIG_BACKUP_DIR}/auth.db-shm"
 WORKER_CONFIG_FILES=(
   "appsettings.json"
   "appsettings.Production.json"
@@ -85,6 +89,36 @@ restore_worker_schedule() {
   fi
 }
 
+backup_auth_db() {
+  if [[ -f "${AUTH_DB_PUBLISH_FILE}" ]]; then
+    mkdir -p "${CONFIG_BACKUP_DIR}"
+    cp -a "${AUTH_DB_PUBLISH_FILE}" "${AUTH_DB_BACKUP}"
+  fi
+  if [[ -f "${AUTH_DB_PUBLISH_FILE}-wal" ]]; then
+    mkdir -p "${CONFIG_BACKUP_DIR}"
+    cp -a "${AUTH_DB_PUBLISH_FILE}-wal" "${AUTH_DB_WAL_BACKUP}"
+  fi
+  if [[ -f "${AUTH_DB_PUBLISH_FILE}-shm" ]]; then
+    mkdir -p "${CONFIG_BACKUP_DIR}"
+    cp -a "${AUTH_DB_PUBLISH_FILE}-shm" "${AUTH_DB_SHM_BACKUP}"
+  fi
+}
+
+restore_auth_db() {
+  if [[ -f "${AUTH_DB_BACKUP}" ]]; then
+    mkdir -p "${PUBLISH_DIR}"
+    cp -a "${AUTH_DB_BACKUP}" "${AUTH_DB_PUBLISH_FILE}"
+  fi
+  if [[ -f "${AUTH_DB_WAL_BACKUP}" ]]; then
+    mkdir -p "${PUBLISH_DIR}"
+    cp -a "${AUTH_DB_WAL_BACKUP}" "${AUTH_DB_PUBLISH_FILE}-wal"
+  fi
+  if [[ -f "${AUTH_DB_SHM_BACKUP}" ]]; then
+    mkdir -p "${PUBLISH_DIR}"
+    cp -a "${AUTH_DB_SHM_BACKUP}" "${AUTH_DB_PUBLISH_FILE}-shm"
+  fi
+}
+
 backup_worker_logs() {
   if [[ ! -d "${WORKER_LOGS_DIR}" ]]; then
     return
@@ -107,6 +141,8 @@ systemctl stop multicountryfx-worker.service || true
 
 echo "Backing up worker schedule..."
 backup_worker_schedule
+echo "Backing up auth database..."
+backup_auth_db
 
 echo "Pulling latest changes..."
 git -C "${ROOT_DIR}" pull
@@ -125,6 +161,8 @@ dotnet publish "${ROOT_DIR}/MultiCountryFxImporter.Worker/MultiCountryFxImporter
 
 echo "Restoring worker schedule..."
 restore_worker_schedule
+echo "Restoring auth database..."
+restore_auth_db
 echo "Restoring worker configuration..."
 restore_worker_config
 echo "Restoring worker logs..."
