@@ -10,20 +10,20 @@ namespace MultiCountryFxImporter.Api.Controllers;
 [Route("api/[controller]")]
 public class CurrencyRatesImportController : ControllerBase
 {
-    private readonly ICurrencyImporter _importer;
+    private readonly ICurrencyImporterResolver _importerResolver;
     private readonly ICurrencyRatesApiClient _apiClient;
     private readonly CurrencyRatesApiOptions _apiOptions;
     private readonly CurrencyRatesImportOptions _importOptions;
     private readonly ILogger<CurrencyRatesImportController> _logger;
 
     public CurrencyRatesImportController(
-        ICurrencyImporter importer,
+        ICurrencyImporterResolver importerResolver,
         ICurrencyRatesApiClient apiClient,
         IOptions<CurrencyRatesApiOptions> apiOptions,
         IOptions<CurrencyRatesImportOptions> importOptions,
         ILogger<CurrencyRatesImportController> logger)
     {
-        _importer = importer;
+        _importerResolver = importerResolver;
         _apiClient = apiClient;
         _apiOptions = apiOptions.Value;
         _importOptions = importOptions.Value;
@@ -33,7 +33,8 @@ public class CurrencyRatesImportController : ControllerBase
     [HttpPost("current")]
     public async Task<IActionResult> ImportCurrent(
         [FromQuery] string company,
-        [FromQuery] CurrencyRatesEnvironment? environment,
+        [FromQuery] string? environment,
+        [FromQuery] string? bankModule,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(company))
@@ -41,14 +42,15 @@ public class CurrencyRatesImportController : ControllerBase
             return BadRequest("company is required");
         }
 
-        return await ImportRatesAsync(company, null, ResolveEnvironment(environment), cancellationToken);
+        return await ImportRatesAsync(company, null, ResolveEnvironment(environment), bankModule, cancellationToken);
     }
 
     [HttpPost("date")]
     public async Task<IActionResult> ImportForDate(
         [FromQuery] string company,
         [FromQuery] string date,
-        [FromQuery] CurrencyRatesEnvironment? environment,
+        [FromQuery] string? environment,
+        [FromQuery] string? bankModule,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(company))
@@ -62,15 +64,26 @@ public class CurrencyRatesImportController : ControllerBase
             return BadRequest("date must be in yyyy-MM-dd format");
         }
 
-        return await ImportRatesAsync(company, parsedDate, ResolveEnvironment(environment), cancellationToken);
+        return await ImportRatesAsync(company, parsedDate, ResolveEnvironment(environment), bankModule, cancellationToken);
     }
 
     private async Task<IActionResult> ImportRatesAsync(
         string company,
         DateTime? date,
         string environment,
+        string? bankModule,
         CancellationToken cancellationToken)
     {
+        IBankCurrencyImporter importer;
+        try
+        {
+            importer = _importerResolver.Resolve(bankModule);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+
         IReadOnlyList<CompanyCurrencyDefinition> companyCurrencies;
         try
         {
@@ -101,13 +114,13 @@ public class CurrencyRatesImportController : ControllerBase
         try
         {
             rates = date.HasValue
-                ? await _importer.ImportAsync(date, date, currencyNames)
-                : await _importer.ImportAsync(null, null, currencyNames);
+                ? await importer.ImportAsync(date, date, currencyNames)
+                : await importer.ImportAsync(null, null, currencyNames);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch rates from MNB.");
-            return StatusCode(StatusCodes.Status502BadGateway, "Failed to fetch rates from MNB.");
+            _logger.LogError(ex, "Failed to fetch rates from {BankModule}.", importer.ModuleDefinition.Code);
+            return StatusCode(StatusCodes.Status502BadGateway, $"Failed to fetch rates from {importer.ModuleDefinition.Code}.");
         }
 
         var filteredRates = rates
@@ -125,6 +138,10 @@ public class CurrencyRatesImportController : ControllerBase
         {
             return NotFound("No matching rates found.");
         }
+
+        var refCurrencyCode = !string.IsNullOrWhiteSpace(importer.ModuleDefinition.DefaultRefCurrencyCode)
+            ? importer.ModuleDefinition.DefaultRefCurrencyCode
+            : _importOptions.RefCurrencyCode;
 
         var results = new List<CurrencyRatesImportResult>();
         foreach (var group in filteredRates.GroupBy(rate => rate.Date))
@@ -145,10 +162,10 @@ public class CurrencyRatesImportController : ControllerBase
                         CurrencyCode = rate.Currency,
                         CurrencyRate = rate.Rate,
                         ConvFactor = convFactor,
-                        RefCurrencyCode = _importOptions.RefCurrencyCode,
+                        RefCurrencyCode = refCurrencyCode,
                         DirectCurrencyRate = rate.Rate,
                         DirectCurrencyRateRound = round,
-                        CTableNo = "MNB"
+                        CTableNo = importer.ModuleDefinition.Code
                     };
                 }).ToList()
             };
@@ -173,9 +190,12 @@ public class CurrencyRatesImportController : ControllerBase
         return Ok(new CurrencyRatesImportBatchResponse(company, results));
     }
 
-    private string ResolveEnvironment(CurrencyRatesEnvironment? environment)
+    private string ResolveEnvironment(string? environment)
     {
-        var selected = environment?.ToString() ?? _apiOptions.DefaultIfsEnvironment;
+        var selected = string.IsNullOrWhiteSpace(environment)
+            ? _apiOptions.DefaultIfsEnvironment
+            : environment.Trim();
+
         if (_apiOptions.AvailableEnvironments.Length == 0)
         {
             return selected;

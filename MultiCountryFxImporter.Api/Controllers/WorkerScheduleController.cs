@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using MultiCountryFxImporter.Core.Interfaces;
 using MultiCountryFxImporter.Api.Services;
 using MultiCountryFxImporter.Core.Models;
 
@@ -14,17 +15,34 @@ public class WorkerScheduleController : ControllerBase
 {
     private readonly WorkerScheduleStore _store;
     private readonly CurrencyRatesApiOptions _apiOptions;
+    private readonly ICurrencyImporterResolver _importerResolver;
 
-    public WorkerScheduleController(WorkerScheduleStore store, IOptions<CurrencyRatesApiOptions> apiOptions)
+    public WorkerScheduleController(
+        WorkerScheduleStore store,
+        IOptions<CurrencyRatesApiOptions> apiOptions,
+        ICurrencyImporterResolver importerResolver)
     {
         _store = store;
         _apiOptions = apiOptions.Value;
+        _importerResolver = importerResolver;
     }
 
     [HttpGet]
     public async Task<ActionResult<WorkerScheduleFile>> Get(CancellationToken cancellationToken)
     {
         var data = await _store.ReadAsync(cancellationToken);
+        foreach (var entry in data.WorkerSchedule?.Environments ?? new List<WorkerScheduleEntry>())
+        {
+            if (string.IsNullOrWhiteSpace(entry.BankModule))
+            {
+                entry.BankModule = _importerResolver.DefaultModuleCode;
+            }
+            else
+            {
+                entry.BankModule = entry.BankModule.Trim().ToUpperInvariant();
+            }
+        }
+
         return Ok(data);
     }
 
@@ -45,7 +63,10 @@ public class WorkerScheduleController : ControllerBase
     {
         var errors = new List<string>();
         var entries = scheduleFile.WorkerSchedule?.Environments ?? new List<WorkerScheduleEntry>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenEntries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var supportedBankModules = _importerResolver.GetAvailableModules()
+            .Select(module => module.Code)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var entry in entries)
         {
@@ -53,11 +74,6 @@ public class WorkerScheduleController : ControllerBase
             {
                 errors.Add("Environment is required.");
                 continue;
-            }
-
-            if (!seen.Add(entry.Environment))
-            {
-                errors.Add($"Environment '{entry.Environment}' is duplicated.");
             }
 
             if (_apiOptions.AvailableEnvironments.Length > 0 &&
@@ -74,6 +90,38 @@ public class WorkerScheduleController : ControllerBase
             if (!TimeOnly.TryParse(entry.RunAtLocalTime, CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
             {
                 errors.Add($"RunAtLocalTime '{entry.RunAtLocalTime}' is invalid for environment '{entry.Environment}'.");
+            }
+
+            if (string.IsNullOrWhiteSpace(entry.BankModule))
+            {
+                entry.BankModule = _importerResolver.DefaultModuleCode;
+            }
+            else
+            {
+                entry.BankModule = entry.BankModule.Trim().ToUpperInvariant();
+            }
+
+            if (supportedBankModules.Count > 0 && !supportedBankModules.Contains(entry.BankModule))
+            {
+                errors.Add($"Bank module '{entry.BankModule}' is not supported for environment '{entry.Environment}'.");
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(entry.Company))
+            {
+                continue;
+            }
+
+            var duplicateKey = string.Join(
+                "|",
+                entry.Environment.Trim().ToUpperInvariant(),
+                entry.Company.Trim().ToUpperInvariant(),
+                entry.BankModule.Trim().ToUpperInvariant());
+
+            if (!seenEntries.Add(duplicateKey))
+            {
+                errors.Add(
+                    $"Environment '{entry.Environment}', company '{entry.Company}', bank module '{entry.BankModule}' is duplicated.");
             }
         }
 

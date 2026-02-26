@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using MultiCountryFxImporter.Infrastructure;
 using MultiCountryFxImporter.Worker.Models;
 
 namespace MultiCountryFxImporter.Worker.Services;
@@ -60,7 +61,10 @@ public class WorkerRunStateStore
                     continue;
                 }
 
-                var key = BuildKey(entry.Environment, entry.Company);
+                var bankModule = string.IsNullOrWhiteSpace(entry.BankModule)
+                    ? BankModuleCatalog.DefaultModuleCode
+                    : entry.BankModule;
+                var key = BuildKey(entry.Environment, entry.Company, bankModule);
                 result[key] = date;
             }
 
@@ -93,8 +97,12 @@ public class WorkerRunStateStore
         File.Move(tempPath, _path, true);
     }
 
-    private static string BuildKey(string environment, string company)
-        => $"{environment.Trim().ToUpperInvariant()}|{company.Trim().ToUpperInvariant()}";
+    private static string BuildKey(string environment, string company, string bankModule)
+        => string.Join(
+            "|",
+            environment.Trim().ToUpperInvariant(),
+            company.Trim().ToUpperInvariant(),
+            BankModuleCatalog.NormalizeCode(bankModule));
 
     private static WorkerRunStateEntry? ParseKey(string key, DateOnly date)
     {
@@ -103,16 +111,26 @@ public class WorkerRunStateStore
             return null;
         }
 
-        var parts = key.Split('|', 2, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2)
+        var parts = key.Split('|', StringSplitOptions.None);
+        if (parts.Length is < 2 or > 3)
+        {
+            return null;
+        }
+
+        var environment = parts[0];
+        var company = parts[1];
+        var bankModule = parts.Length == 3 ? parts[2] : BankModuleCatalog.DefaultModuleCode;
+
+        if (string.IsNullOrWhiteSpace(environment) || string.IsNullOrWhiteSpace(company))
         {
             return null;
         }
 
         return new WorkerRunStateEntry
         {
-            Environment = parts[0],
-            Company = parts[1],
+            Environment = environment.Trim().ToUpperInvariant(),
+            Company = company.Trim().ToUpperInvariant(),
+            BankModule = BankModuleCatalog.NormalizeCode(bankModule),
             LastRunDate = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
         };
     }

@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using MultiCountryFxImporter.Core.Interfaces;
 using MultiCountryFxImporter.Core.Models;
 using MultiCountryFxImporter.MnbClient;
 using System.Globalization;
 
 namespace MultiCountryFxImporter.Infrastructure
 {
-    public class MnbImporter : ICurrencyImporter
+    public class MnbImporter : IBankCurrencyImporter
     {
         private readonly MNBArfolyamServiceSoapClient _client;
 
@@ -17,6 +18,13 @@ namespace MultiCountryFxImporter.Infrastructure
         {
             _client = client;
         }
+
+        public BankModuleDefinition ModuleDefinition { get; } = new()
+        {
+            Code = BankModuleCatalog.MnbCode,
+            DisplayName = "Magyar Nemzeti Bank",
+            DefaultRefCurrencyCode = "HUF"
+        };
 
         public async Task<IEnumerable<FxRate>> ImportAsync(
             DateTime? startDate = null,

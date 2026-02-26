@@ -1,54 +1,58 @@
 # MultiCountry FX Importer
 
-This repository contains a .NET 8 solution for importing foreign exchange rates from multiple national banks (starting with MNB – Hungary) using SOAP/REST and exporting them to CSV and API endpoints.
+This repository contains a .NET 8 solution for importing FX rates from multiple national banks via modular importers and pushing data to downstream APIs.
 
 ## Repository structure
 
 ```
-extracted/
-  .gitignore
-  MultiCountryFxImporter.sln
-  MultiCountryFxImporter.Api/
-    appsettings.Development.json
-    appsettings.json
-    MultiCountryFxImporter.Api.csproj
-    MultiCountryFxImporter.Api.http
-    Program.cs
-    Controllers/
-      FxRateController.cs
-    Properties/
-      launchSettings.json
-  MultiCountryFxImporter.Core/
-    MultiCountryFxImporter.Core.csproj
-    Interfaces/
-      ICurrencyImporter.cs
-    Models/
-      CurrencyRate.cs
-      FxRate.cs
-  MultiCountryFxImporter.Infrastructure/
-    MnbImporter.cs
-    MultiCountryFxImporter.Infrastructure.csproj
-    ServiceReference/
-      dotnet-svcutil.params.json
-      Reference.cs
-  MultiCountryFxImporter.Worker/
-    appsettings.Development.json
-    appsettings.json
-    MultiCountryFxImporter.Worker.csproj
-    Program.cs
-    Worker.cs
-    Properties/
-      launchSettings.json
-    Services/
+MultiCountryFxImporter.sln
+MultiCountryFxImporter.Core/
+  Interfaces/
+    ICurrencyImporter.cs
+    IBankCurrencyImporter.cs
+    ICurrencyImporterResolver.cs
+  Models/
+    FxRate.cs
+    WorkerScheduleOptions.cs
+    BankModuleDefinition.cs
+
+MultiCountryFxImporter.Infrastructure/
+  MnbImporter.cs
+  EcbImporter.cs
+  CurrencyImporterResolver.cs
+  BankModuleCatalog.cs
+  EcbApiOptions.cs
+  CurrencyRatesApiClient.cs
+
+MultiCountryFxImporter.Api/
+  Program.cs
+  Controllers/
+    CurrencyRatesImportController.cs
+    ImportOptionsController.cs
+    WorkerScheduleController.cs
+    FxRateController.cs
+  Views/
+    Home/Index.cshtml
+    WorkerSchedule/Index.cshtml
+
+MultiCountryFxImporter.Worker/
+  Program.cs
+  Worker.cs
+  Services/
+    WorkerRunStateStore.cs
+  Models/
+    WorkerRunStateFile.cs
+
+worker-schedule.json
 ```
 
-## Main features
+## Key behaviors
 
-* ASP.NET Core Web API for exposing latest FX rates
-* Background Worker (HostedService) for scheduled imports
-* MNB SOAP integration (XML parsing + unit normalization)
-* CSV export using CsvHelper
-* Extensible importer architecture for additional countries
+* Manual import accepts optional `bankModule`; missing value defaults to `MNB`.
+* Worker schedule supports per-entry `bankModule`.
+* Worker daily deduplication key: `Environment|Company|BankModule`.
+* UI lists available modules and environments from `/api/import-options`.
+* `ECB` module uses official ECB Data API (`format=csvdata`).
 
 ## Build & Run
 
@@ -57,10 +61,3 @@ dotnet build
 dotnet run --project MultiCountryFxImporter.Api
 dotnet run --project MultiCountryFxImporter.Worker
 ```
-
-## Notes
-
-* `bin/` and `obj/` directories are excluded from analysis
-* All rates are normalized to HUF per 1 unit of currency
-
-

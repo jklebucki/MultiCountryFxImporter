@@ -26,7 +26,7 @@
             </div>
 
             <div class="mt-6 space-y-4">
-                <div v-for="(entry, index) in entries" :key="entry.id" class="grid gap-4 md:grid-cols-4 bg-slate-950/70 border border-slate-800 rounded-xl p-4">
+                <div v-for="(entry, index) in entries" :key="entry.id" class="grid gap-4 md:grid-cols-5 bg-slate-950/70 border border-slate-800 rounded-xl p-4">
                     <div>
                         <label class="text-xs uppercase text-slate-400">Environment</label>
                         <select v-model="entry.environment" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm">
@@ -36,6 +36,12 @@
                     <div>
                         <label class="text-xs uppercase text-slate-400">Company</label>
                         <input v-model="entry.company" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                        <label class="text-xs uppercase text-slate-400">Bank Module</label>
+                        <select v-model="entry.bankModule" class="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                            <option v-for="module in bankModules" :key="module.code" :value="module.code">{{ module.displayName }} ({{ module.code }})</option>
+                        </select>
                     </div>
                     <div>
                         <label class="text-xs uppercase text-slate-400">Run At (HH:mm:ss)</label>
@@ -80,19 +86,47 @@
         createApp({
             data() {
                 return {
-                    environments: ["PROD", "TEST", "SZKOL"],
+                    environments: [],
+                    bankModules: [],
                     entries: [],
                     result: null,
                     lastSaved: null
                 };
             },
-            mounted() {
-                this.reload();
+            async mounted() {
+                await this.loadImportOptions();
+                await this.reload();
                 this.$nextTick(() => {
                     this.initTimePickers();
                 });
             },
             methods: {
+                async loadImportOptions() {
+                    try {
+                        const response = await fetch("/api/import-options");
+                        if (!response.ok) {
+                            return;
+                        }
+
+                        const payload = await response.json();
+                        const environments = Array.isArray(payload.availableEnvironments) && payload.availableEnvironments.length > 0
+                            ? payload.availableEnvironments
+                            : ["TEST"];
+                        const bankModules = Array.isArray(payload.availableBankModules) && payload.availableBankModules.length > 0
+                            ? payload.availableBankModules
+                            : [{ code: "MNB", displayName: "Magyar Nemzeti Bank" }];
+
+                        this.environments = environments;
+                        this.bankModules = bankModules;
+                    } catch {
+                        if (this.environments.length === 0) {
+                            this.environments = ["TEST"];
+                        }
+                        if (this.bankModules.length === 0) {
+                            this.bankModules = [{ code: "MNB", displayName: "Magyar Nemzeti Bank" }];
+                        }
+                    }
+                },
                 formatApiBody(body, response) {
                     if (!body) {
                         return "<empty>";
@@ -144,10 +178,13 @@
                     return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
                 },
                 addEntry() {
+                    const defaultEnvironment = this.environments[0] || "TEST";
+                    const defaultBankModule = this.bankModules[0]?.code || "MNB";
                     this.entries.push({
                         id: this.generateId(),
-                        environment: "TEST",
+                        environment: defaultEnvironment,
                         company: "KFT",
+                        bankModule: defaultBankModule,
                         runAtLocalTime: "02:00:00"
                     });
                     this.$nextTick(() => {
@@ -169,8 +206,9 @@
                             const list = parsed.workerSchedule?.environments ?? [];
                             this.entries = list.map(entry => ({
                                 id: this.generateId(),
-                                environment: entry.environment ?? "TEST",
+                                environment: entry.environment ?? (this.environments[0] || "TEST"),
                                 company: entry.company ?? "KFT",
+                                bankModule: entry.bankModule ?? (this.bankModules[0]?.code || "MNB"),
                                 runAtLocalTime: entry.runAtLocalTime ?? "02:00:00"
                             }));
                             this.$nextTick(() => {
@@ -187,6 +225,7 @@
                             environments: this.entries.map(entry => ({
                                 environment: entry.environment,
                                 company: entry.company,
+                                bankModule: entry.bankModule,
                                 runAtLocalTime: this.normalizeTime(entry.runAtLocalTime)
                             }))
                         }

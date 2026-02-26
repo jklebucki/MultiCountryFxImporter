@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.Extensions.Options;
 using MultiCountryFxImporter.Core.Interfaces;
 using MultiCountryFxImporter.Core.Models;
+using MultiCountryFxImporter.Infrastructure;
 using MultiCountryFxImporter.Worker.Services;
 
 namespace MultiCountryFxImporter.Worker;
@@ -11,7 +12,6 @@ public class Worker : BackgroundService
     private readonly ILogger<Worker> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly WorkerOptions _workerOptions;
-    private readonly CurrencyRatesApiOptions _apiOptions;
     private readonly IOptionsMonitor<WorkerScheduleOptions> _scheduleMonitor;
     private readonly WorkerRunStateStore _stateStore;
     private readonly Dictionary<string, DateOnly> _lastRunDates = new(StringComparer.OrdinalIgnoreCase);
@@ -20,14 +20,12 @@ public class Worker : BackgroundService
         ILogger<Worker> logger,
         IServiceProvider serviceProvider,
         IOptions<WorkerOptions> workerOptions,
-        IOptions<CurrencyRatesApiOptions> apiOptions,
         IOptionsMonitor<WorkerScheduleOptions> scheduleMonitor,
         WorkerRunStateStore stateStore)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _workerOptions = workerOptions.Value;
-        _apiOptions = apiOptions.Value;
         _scheduleMonitor = scheduleMonitor;
         _stateStore = stateStore;
     }
@@ -123,27 +121,58 @@ public class Worker : BackgroundService
             return string.Empty;
         }
 
-        return BuildKey(entry.Environment, company);
+        var bankModule = !string.IsNullOrWhiteSpace(entry.BankModule)
+            ? entry.BankModule
+            : BankModuleCatalog.DefaultModuleCode;
+
+        return BuildKey(entry.Environment, company, bankModule);
     }
 
-    private static string BuildKey(string environment, string company)
-        => $"{environment.Trim().ToUpperInvariant()}|{company.Trim().ToUpperInvariant()}";
+    private static string BuildKey(string environment, string company, string bankModule)
+        => string.Join(
+            "|",
+            environment.Trim().ToUpperInvariant(),
+            company.Trim().ToUpperInvariant(),
+            BankModuleCatalog.NormalizeCode(bankModule));
 
     private async Task ProcessEnvironmentAsync(WorkerScheduleEntry entry, CancellationToken stoppingToken)
     {
         var environment = entry.Environment;
         var company = !string.IsNullOrWhiteSpace(entry.Company) ? entry.Company : _workerOptions.Company;
+        var bankModuleCode = BankModuleCatalog.NormalizeCode(entry.BankModule);
         if (string.IsNullOrWhiteSpace(company))
         {
-            _logger.LogWarning("Company is missing for environment {Environment}.", environment);
+            _logger.LogWarning(
+                "Company is missing for environment {Environment} and bank module {BankModule}.",
+                environment,
+                bankModuleCode);
             return;
         }
 
-        _logger.LogInformation("Starting import for {Company} in {Environment}.", company, environment);
+        _logger.LogInformation(
+            "Starting import for {Company} in {Environment} using {BankModule}.",
+            company,
+            environment,
+            bankModuleCode);
 
         using var scope = _serviceProvider.CreateScope();
-        var importer = scope.ServiceProvider.GetRequiredService<ICurrencyImporter>();
+        var importerResolver = scope.ServiceProvider.GetRequiredService<ICurrencyImporterResolver>();
         var apiClient = scope.ServiceProvider.GetRequiredService<ICurrencyRatesApiClient>();
+        IBankCurrencyImporter importer;
+        try
+        {
+            importer = importerResolver.Resolve(bankModuleCode);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Bank module {BankModule} is not supported for {Environment}/{Company}.",
+                bankModuleCode,
+                environment,
+                company);
+            return;
+        }
 
         IReadOnlyList<CompanyCurrencyDefinition> companyCurrencies;
         try
@@ -179,7 +208,11 @@ public class Worker : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch rates from source for {Environment}.", environment);
+            _logger.LogError(
+                ex,
+                "Failed to fetch rates from source {BankModule} for {Environment}.",
+                importer.ModuleDefinition.Code,
+                environment);
             return;
         }
 
@@ -189,7 +222,11 @@ public class Worker : BackgroundService
 
         if (filteredRates.Count == 0)
         {
-            _logger.LogWarning("No matching rates found for company {Company} ({Environment}).", company, environment);
+            _logger.LogWarning(
+                "No matching rates found for company {Company} ({Environment}, {BankModule}).",
+                company,
+                environment,
+                importer.ModuleDefinition.Code);
             return;
         }
 
@@ -200,11 +237,16 @@ public class Worker : BackgroundService
         if (missingCurrencies.Count > 0)
         {
             _logger.LogInformation(
-                "Missing rates for {Count} currencies ({Environment}): {Currencies}.",
+                "Missing rates for {Count} currencies ({Environment}, {BankModule}): {Currencies}.",
                 missingCurrencies.Count,
                 environment,
+                importer.ModuleDefinition.Code,
                 string.Join(", ", missingCurrencies));
         }
+
+        var refCurrencyCode = !string.IsNullOrWhiteSpace(importer.ModuleDefinition.DefaultRefCurrencyCode)
+            ? importer.ModuleDefinition.DefaultRefCurrencyCode
+            : _workerOptions.RefCurrencyCode;
 
         foreach (var group in filteredRates.GroupBy(rate => rate.Date))
         {
@@ -224,10 +266,10 @@ public class Worker : BackgroundService
                         CurrencyCode = rate.Currency,
                         CurrencyRate = rate.Rate,
                         ConvFactor = convFactor,
-                        RefCurrencyCode = _workerOptions.RefCurrencyCode,
+                        RefCurrencyCode = refCurrencyCode,
                         DirectCurrencyRate = rate.Rate,
                         DirectCurrencyRateRound = round,
-                        CTableNo = "MNB"
+                        CTableNo = importer.ModuleDefinition.Code
                     };
                 }).ToList()
             };
@@ -252,7 +294,11 @@ public class Worker : BackgroundService
             }
         }
 
-        _logger.LogInformation("Finished import for {Company} in {Environment}.", company, environment);
+        _logger.LogInformation(
+            "Finished import for {Company} in {Environment} using {BankModule}.",
+            company,
+            environment,
+            importer.ModuleDefinition.Code);
     }
 
     private void LogImportResponse(CurrencyRatesImportResponse response, CurrencyRatesImportRequest request)

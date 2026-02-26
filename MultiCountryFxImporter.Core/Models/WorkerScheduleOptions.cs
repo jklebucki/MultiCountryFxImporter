@@ -9,6 +9,7 @@ public sealed class WorkerScheduleEntry
 {
     public string Environment { get; set; } = "TEST";
     public string Company { get; set; } = "KFT";
+    public string BankModule { get; set; } = "MNB";
     public string RunAtLocalTime { get; set; } = "02:00:00";
 }
 

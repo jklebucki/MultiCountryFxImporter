@@ -9,5 +9,6 @@ public sealed class WorkerRunStateEntry
 {
     public string Environment { get; set; } = string.Empty;
     public string Company { get; set; } = string.Empty;
+    public string BankModule { get; set; } = string.Empty;
     public string LastRunDate { get; set; } = string.Empty;
 }

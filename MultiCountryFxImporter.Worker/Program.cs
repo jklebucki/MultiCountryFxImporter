@@ -29,8 +29,10 @@ builder.Services.AddSerilog((_, configuration) =>
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection("Worker"));
 builder.Services.Configure<CurrencyRatesApiOptions>(builder.Configuration.GetSection("CurrencyRatesApi"));
 builder.Services.Configure<WorkerScheduleOptions>(builder.Configuration.GetSection("WorkerSchedule"));
+builder.Services.Configure<EcbApiOptions>(builder.Configuration.GetSection("EcbApi"));
 
 var apiOptions = builder.Configuration.GetSection("CurrencyRatesApi").Get<CurrencyRatesApiOptions>() ?? new CurrencyRatesApiOptions();
+var ecbOptions = builder.Configuration.GetSection("EcbApi").Get<EcbApiOptions>() ?? new EcbApiOptions();
 builder.Services.AddHttpClient<ICurrencyRatesApiClient, CurrencyRatesApiClient>(client =>
 {
     if (!string.IsNullOrWhiteSpace(apiOptions.BaseUrl))
@@ -38,11 +40,21 @@ builder.Services.AddHttpClient<ICurrencyRatesApiClient, CurrencyRatesApiClient>(
         client.BaseAddress = new Uri(apiOptions.BaseUrl);
     }
 });
+builder.Services.AddHttpClient<EcbImporter>(client =>
+{
+    if (!string.IsNullOrWhiteSpace(ecbOptions.BaseUrl))
+    {
+        client.BaseAddress = new Uri(ecbOptions.BaseUrl);
+    }
+});
 
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddSingleton<WorkerRunStateStore>();
-builder.Services.AddScoped<ICurrencyImporter, MnbImporter>();
+builder.Services.AddScoped<MnbImporter>();
 builder.Services.AddScoped<MNBArfolyamServiceSoapClient>();
+builder.Services.AddScoped<IBankCurrencyImporter>(serviceProvider => serviceProvider.GetRequiredService<MnbImporter>());
+builder.Services.AddScoped<IBankCurrencyImporter>(serviceProvider => serviceProvider.GetRequiredService<EcbImporter>());
+builder.Services.AddScoped<ICurrencyImporterResolver, CurrencyImporterResolver>();
 
 var host = builder.Build();
 host.Run();

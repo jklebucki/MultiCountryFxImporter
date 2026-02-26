@@ -26,12 +26,13 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.UseInlineDefinitionsForEnums();
 });
-builder.Services.AddScoped<ICurrencyImporter, MnbImporter>();
+builder.Services.AddScoped<MnbImporter>();
 builder.Services.AddScoped<MNBArfolyamServiceSoapClient>();
 builder.Services.Configure<CurrencyRatesApiOptions>(builder.Configuration.GetSection("CurrencyRatesApi"));
 builder.Services.Configure<CurrencyRatesImportOptions>(builder.Configuration.GetSection("CurrencyRatesImport"));
 builder.Services.Configure<WorkerScheduleConfigOptions>(builder.Configuration.GetSection("WorkerScheduleConfig"));
 builder.Services.Configure<LogViewerOptions>(builder.Configuration.GetSection("LogViewer"));
+builder.Services.Configure<EcbApiOptions>(builder.Configuration.GetSection("EcbApi"));
 builder.Services.AddSingleton<MultiCountryFxImporter.Api.Services.WorkerScheduleStore>();
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("Smtp"));
 
@@ -98,6 +99,7 @@ builder.Services.Configure<DataProtectionTokenProviderOptions>(options =>
 builder.Services.AddTransient<IEmailSender, SmtpEmailSender>();
 
 var apiOptions = builder.Configuration.GetSection("CurrencyRatesApi").Get<CurrencyRatesApiOptions>() ?? new CurrencyRatesApiOptions();
+var ecbOptions = builder.Configuration.GetSection("EcbApi").Get<EcbApiOptions>() ?? new EcbApiOptions();
 builder.Services.AddHttpClient<ICurrencyRatesApiClient, CurrencyRatesApiClient>(client =>
 {
     if (!string.IsNullOrWhiteSpace(apiOptions.BaseUrl))
@@ -105,6 +107,17 @@ builder.Services.AddHttpClient<ICurrencyRatesApiClient, CurrencyRatesApiClient>(
         client.BaseAddress = new Uri(apiOptions.BaseUrl);
     }
 });
+builder.Services.AddHttpClient<EcbImporter>(client =>
+{
+    if (!string.IsNullOrWhiteSpace(ecbOptions.BaseUrl))
+    {
+        client.BaseAddress = new Uri(ecbOptions.BaseUrl);
+    }
+});
+builder.Services.AddScoped<IBankCurrencyImporter>(serviceProvider => serviceProvider.GetRequiredService<MnbImporter>());
+builder.Services.AddScoped<IBankCurrencyImporter>(serviceProvider => serviceProvider.GetRequiredService<EcbImporter>());
+builder.Services.AddScoped<ICurrencyImporterResolver, CurrencyImporterResolver>();
+builder.Services.AddScoped<ICurrencyImporter>(serviceProvider => serviceProvider.GetRequiredService<ICurrencyImporterResolver>().Resolve(null));
 
 var app = builder.Build();
 
