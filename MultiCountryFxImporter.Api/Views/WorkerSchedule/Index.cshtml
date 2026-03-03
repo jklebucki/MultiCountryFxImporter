@@ -109,12 +109,20 @@
                         }
 
                         const payload = await response.json();
+                        // Deduplicate environments
                         const environments = Array.isArray(payload.availableEnvironments) && payload.availableEnvironments.length > 0
-                            ? payload.availableEnvironments
+                            ? [...new Set(payload.availableEnvironments)]
                             : ["TEST"];
-                        const bankModules = Array.isArray(payload.availableBankModules) && payload.availableBankModules.length > 0
+                        // Deduplicate bank modules by code
+                        let bankModules = Array.isArray(payload.availableBankModules) && payload.availableBankModules.length > 0
                             ? payload.availableBankModules
                             : [{ code: "MNB", displayName: "Magyar Nemzeti Bank" }];
+                        const seenCodes = new Set();
+                        bankModules = bankModules.filter(module => {
+                            if (seenCodes.has(module.code)) return false;
+                            seenCodes.add(module.code);
+                            return true;
+                        });
 
                         this.environments = environments;
                         this.bankModules = bankModules;
