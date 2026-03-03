@@ -720,6 +720,11 @@ rates_*.csv
 auth.db*
 # Ignore worker state file
 worker-run-state.json
+# Ignore production worker schedule changes
+worker-schedule.json
+# Ignore deployment backup directories
+.deploy-config-backup/
+.deploy-logs-backup/
 
 # Ignore user secrets
 **/secrets.json
